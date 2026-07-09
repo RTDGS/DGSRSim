@@ -1,0 +1,23 @@
+# Select torch/torchvision/torchaudio builds according to your CUDA version.
+torch
+torchvision
+torchaudio
+
+numpy
+scipy
+scikit-learn
+opencv-python
+Pillow
+tqdm
+plyfile
+lpips
+matplotlib
+imageio
+imageio-ffmpeg
+PyYAML
+omegaconf
+hydra-core
+einops
+tensorboard
+wandb
+

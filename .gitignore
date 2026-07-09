@@ -1,0 +1,85 @@
+# Internal collaboration files
+AGENTS.md
+
+# Python cache and local environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Local IDE and OS metadata
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Git metadata accidentally copied from nested projects
+.git/
+.github/
+!.github/
+!.github/workflows/
+!.github/workflows/deploy-pages.yml
+.gitmodules
+
+# Large model weights and checkpoints
+*.pth
+*.pt
+*.ckpt
+*.onnx
+*.engine
+*.safetensors
+
+# Datasets, render outputs, videos, images and point clouds
+*.zip
+*.rar
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+*.ply
+*.npy
+*.npz
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.gif
+*.png
+*.jpg
+*.jpeg
+*.bmp
+*.tif
+*.tiff
+
+# Small qualitative GIFs used by the anonymous GitHub Pages homepage
+!static/results/
+!static/results/*.gif
+
+# Simulation assets to be distributed through cloud storage
+*.usd
+*.usda
+*.usdc
+*.usdz
+*.fbx
+*.glb
+*.gltf
+Simulation/assets/**
+!Simulation/assets/.gitkeep
+
+# Gaussian training and render outputs
+GaussianModel/data/
+GaussianModel/output/
+GaussianModel/result/
+GaussianModel/checkpoint/
+GaussianModel/Tracking-Anything-with-DEVA/saves/
+GaussianModel/lama/big-lama/
+GaussianModel/lama/hub/checkpoints/
+
+# Online observation outputs
+FastSAMRealtime/weights/
+FastSAMRealtime/rt_ply_out/
