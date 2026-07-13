@@ -351,36 +351,12 @@ if __name__ == "__main__":
 '''
 
 python pick_hinge_split_open3d.py \
-  /home/ubuntu/Desktop/gaussian-grouping01/output/microwave/point_cloud_object_removal/iteration_10000/point_cloud.ply \
+  output/scene/point_cloud_object_removal/iteration_10000/point_cloud.ply \
   --filter-first \
-  --filtered-ply /home/ubuntu/Desktop/gaussian-grouping01/output/microwave/point_cloud_object_removal/iteration_10000/point_cloud_filtered.ply \
-  --output-json /home/ubuntu/Desktop/gaussian-grouping01/output/microwave/point_cloud_object_removal/iteration_10000/picked_hinge_split.json \
+  --filtered-ply output/scene/point_cloud_object_removal/iteration_10000/point_cloud_filtered.ply \
+  --output-json output/scene/point_cloud_object_removal/iteration_10000/picked_hinge_split.json \
   --overlap-width 0.002 \
   --run-split \
-  --split-output-dir /home/ubuntu/Desktop/gaussian-grouping01/output/microwave/point_cloud_object_removal/iteration_10000
-
-python 01_pick_hinge_split_open3d.py    /home/ubuntu/Desktop/gaussian-grouping01/output/microwave/point_cloud_object_removal/iteration_10000/point_cloud.ply   --filter-first   --filtered-ply   /home/ubuntu/Desktop/gaussian-grouping01/output/microwave/point_cloud_object_removal/iteration_10000/point_cloud_filtered.ply   --output-json   /home/ubuntu/Desktop/gaussian-grouping01/output/microwave/point_cloud_object_removal/iteration_10000/picked_hinge_split.json   --overlap-width 0.002   --run-split   --split-output-dir   /home/ubuntu/Desktop/gaussian-grouping01/output/microwave/point_cloud_object_removal/iteration_10000
-
-python 01_pick_hinge_split_open3d.py \
-  /home/ubuntu/Desktop/gaussian-grouping01/output/microwave/point_cloud_object_removal/iteration_10000/point_cloud.ply \
-  --filtered-ply /home/ubuntu/Desktop/gaussian-grouping01/output/microwave/point_cloud_object_removal/iteration_10000/point_cloud_filtered.ply \
-  --filter-first \
-  --output-json /home/ubuntu/Desktop/gaussian-grouping01/output/microwave/point_cloud_object_removal/iteration_10000/picked_hinge_split.json \
-  --overlap-width 0.002 \
-  --run-split \
-  --split-output-dir /home/ubuntu/Desktop/gaussian-grouping01/output/microwave/point_cloud_object_removal/iteration_10000
-
-
-python 01_pick_hinge_split_open3d.py \
-       /home/ubuntu/Desktop/gaussian-grouping01/output/medicine_cabinet/point_cloud_object_removal/iteration_20000/filter_sweep/08_cluster_stronger.ply  \
-  --filtered-ply     /home/ubuntu/Desktop/gaussian-grouping01/output/medicine_cabinet/point_cloud_object_removal/iteration_20000/filter_sweep/08_cluster_stronger.ply  \
-  --output-json    /home/ubuntu/Desktop/gaussian-grouping01/output/microwave/temp/filter_sweep/picked_hinge_split.json \
-  --overlap-width 0.002 \
-    --filter-first \
-  --run-split \
-  --split-output-dir    /home/ubuntu/Desktop/gaussian-grouping01/output/microwave/temp
-
-
-
+  --split-output-dir output/scene/point_cloud_object_removal/iteration_10000
 
 '''

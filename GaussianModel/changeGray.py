@@ -1,14 +1,18 @@
 # -*- coding: utf-8 -*-
+import argparse
 import os
 from PIL import Image
 import numpy as np
 
-# ========== 配置部分 ==========
-input_folder = "/home/ubuntu/Desktop/gaussian-grouping01/data/Bonsai/object_mask"        # 输入文件夹
-output_folder = "/home/ubuntu/Desktop/gaussian-grouping01/data/Bonsai/inpaint_object_mask_255"  # 输出文件夹
+parser = argparse.ArgumentParser(description="Convert selected grayscale IDs into binary masks.")
+parser.add_argument("--input", required=True, help="Input mask directory")
+parser.add_argument("--output", required=True, help="Output binary-mask directory")
+parser.add_argument("--target-grays", nargs="+", type=int, default=[3], help="Grayscale IDs mapped to 255")
+args = parser.parse_args()
 
-target_grays = [3]   # 需要变成白色的多个灰度值（可自行增删）
-# ==============================
+input_folder = args.input
+output_folder = args.output
+target_grays = args.target_grays
 
 # 创建输出目录
 os.makedirs(output_folder, exist_ok=True)

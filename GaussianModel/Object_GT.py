@@ -1,10 +1,17 @@
+import argparse
 import os
 import cv2
 import numpy as np
 
-gt_dir = "/home/ubuntu/Desktop/gaussian-grouping01/data/ball-com/images"
-mask_dir = "/home/ubuntu/Desktop/gaussian-grouping01/data/ball-com/inpaint_object_mask_255"
-out_dir = "/home/ubuntu/Desktop/gaussian-grouping01/output/ball-com/train/ours_object_removal/iteration_10000/Object_gt"
+parser = argparse.ArgumentParser(description="Apply binary object masks to ground-truth images.")
+parser.add_argument("--images", required=True, help="Ground-truth image directory")
+parser.add_argument("--masks", required=True, help="Binary mask directory")
+parser.add_argument("--output", required=True, help="Output directory")
+args = parser.parse_args()
+
+gt_dir = args.images
+mask_dir = args.masks
+out_dir = args.output
 
 os.makedirs(out_dir, exist_ok=True)
 

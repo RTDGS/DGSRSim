@@ -1,0 +1,22 @@
+{
+  "schema": "dgsrsim.camera_to_scene_calibration.v1",
+  "calibration_id": "kinect-v2-camera-space-coincident-metric-scene",
+  "calibration_type": "frame_coincidence",
+  "source_frame": "Kinect CameraSpace",
+  "target_frame": "metric simulation scene frame",
+  "units": "meters",
+  "handedness": "right-handed",
+  "T_scene_from_camera": [
+    [1.0, 0.0, 0.0, 0.0],
+    [0.0, 1.0, 0.0, 0.0],
+    [0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0]
+  ],
+  "provenance": "The evaluated setup defines the metric simulation scene frame to coincide with Kinect CameraSpace. The identity matrix is therefore an operational frame definition, not an estimated nonzero baseline. Gaussian reconstruction-unit scaling is carried by the object-state similarity transform and by the background asset transform, not by this rigid extrinsic.",
+  "validation": {
+    "homogeneous_last_row": true,
+    "orthonormal_rotation": true,
+    "rotation_determinant": 1.0,
+    "translation_unit": "meters"
+  }
+}

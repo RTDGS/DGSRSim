@@ -1,8 +1,9 @@
+import argparse
 import os
 import glob
 
 
-def keep_one_fifth_images(folder):
+def keep_one_fifth_images(folder, apply=False):
     # 支持所有常见后缀（大小写）
     exts = [
         "*.jpg", "*.JPG",
@@ -43,6 +44,10 @@ def keep_one_fifth_images(folder):
     print(f"实际保留 {len(keep_files)} 张")
     print(f"实际删除 {len(delete_files)} 张")
 
+    if not apply:
+        print("预览模式：未删除文件。传入 --apply 才会执行删除。")
+        return
+
     # 删除其余文件
     for f in delete_files:
         try:
@@ -54,5 +59,8 @@ def keep_one_fifth_images(folder):
 
 
 if __name__ == "__main__":
-    folder_path = r"/home/ubuntu/Desktop/gaussian-grouping01/data/ScanNet0038/input"
-    keep_one_fifth_images(folder_path)
+    parser = argparse.ArgumentParser(description="Uniformly retain one fifth of the images in a directory.")
+    parser.add_argument("folder", help="Input image directory")
+    parser.add_argument("--apply", action="store_true", help="Delete unselected files; otherwise preview only")
+    args = parser.parse_args()
+    keep_one_fifth_images(args.folder, apply=args.apply)

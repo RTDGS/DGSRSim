@@ -404,12 +404,16 @@ def _read_color_any(root: str, stem: str) -> Tuple[np.ndarray, str]:
 
 if __name__ == "__main__":
     # -------- parameters you edit here --------
-    ROOT = r"E:/code/o3dvis/k2_dump"
+    _HERE = os.path.dirname(os.path.abspath(__file__))
+    ROOT = os.environ.get("DGSRSIM_RGBD_DUMP_DIR", os.path.join(_HERE, "k2_dump"))
     STEM = "000001"
 
     OUT_DIR = os.path.join(ROOT, "masks", STEM)
 
-    FASTSAM_MODEL = r"E:\code\FastSAM\weights\FastSAM-x.pt"
+    FASTSAM_MODEL = os.environ.get(
+        "DGSRSIM_FASTSAM_MODEL",
+        os.path.join(_HERE, "weights", "FastSAM-x.pt"),
+    )
     DEVICE = "cuda"
     IMGSZ = 1024
     CONF = 0.4

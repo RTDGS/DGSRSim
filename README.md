@@ -10,7 +10,7 @@ Project page: https://rtdgs.github.io/DGSRSim/
 
 DGSRSim provides an implementation path for object-level reconstruction, online object-state estimation, and simulation-side state synchronization. The repository is organized around two visible ideas:
 
-- Real/virtual decoupled reconstruction: real RGB-D and multi-view observations are converted into independently managed object Gaussian assets and a separate background field in a shared world frame.
+- Real/virtual decoupled reconstruction: one shared Gaussian scene model is partitioned into independently addressable object subsets and a retained background subset in the same reconstruction frame.
 - Real-to-simulation synchronization: online RGB-D observations produce object-level point clouds, the recovered object state is written to the corresponding simulation asset, and the virtual scene can update only the objects whose states change.
 
 The simulation scene is asset-composable. Object assets can be added, removed, replaced, or rearranged, and robot assets such as a manipulator can be introduced into the same scene. These capabilities support object-level state tracking and interaction studies, while the repository does not claim robot task reliability, grasp success rate, contact stability, or long-horizon closed-loop control performance from the current evidence alone.
@@ -31,13 +31,19 @@ third_party_licenses/           License texts for retained third-party source co
 
 ## Modules
 
-`GaussianModel/` is the core module of this project. It generates object-level decoupled Gaussian Splatting scene representations from captured data and supports background/object separation, pseudo-label preparation, training, rendering, and object editing. `GaussianModel/Usage` records the original step-by-step workflow used after dataset capture to generate independent Gaussian models.
+`GaussianModel/` is the core module of this project. It trains one shared Gaussian scene model with instance supervision and a Gaussian-Grouping classifier head. Object and background assets are obtained by partitioning the shared Gaussian space according to learned instance ownership; removing an object's assigned Gaussian subset leaves the retained background subset. The module supports pseudo-label preparation, training, partitioned rendering, asset extraction, and object editing. `GaussianModel/Usage` records the original step-by-step workflow used after dataset capture.
 
-`FastSAMRealtime/` handles online observation-side processing, including Kinect image acquisition, strict RGB-D alignment, FastSAM segmentation, object point-cloud cropping, filtering, and point-cloud registration. This module supports the online object-state estimation pipeline discussed in the paper. A stage-wise runtime of approximately 73 ms/frame corresponds to about 13-14 FPS under the reported implementation configuration; this repository therefore describes the system as having online processing capability or online interaction potential, rather than making an unconditional robot-control claim.
+`FastSAMRealtime/` handles online observation-side processing, including Kinect image acquisition, strict RGB-D alignment, FastSAM segmentation, object point-cloud cropping, filtering, and point-cloud registration. This module supports the online object-state estimation pipeline discussed in the paper. The reported stage means sum to approximately 73 ms per processed update. Their arithmetic reciprocal is about 13.7 Hz, but it is not measured loop throughput: the released script captures at 10 fps, updates the cached object cloud at up to 5 Hz, and triggers the selected-object registration on demand. The repository therefore describes online processing capability or online interaction potential rather than unconditional robot-control performance.
+
+The released registration path applies FPFH + RANSAC initialization followed by GICP refinement. The active `rt_seg_strict_align_cut_object_pcd5.py` configuration uses `out_nb=20`, `out_std=1.5`, `src_pre_voxel=0.007`, `tgt_pre_voxel=0.003`, and a GICP fitness threshold of `0.05`. A state is written only when the returned transform is a finite, invertible `4 x 4` matrix and the fitness threshold is met; the released path does not implement an additional pose-jump gate, SE(3) temporal smoother, or automatic continuous retriggering.
+
+The observed Kinect point cloud is expressed in CameraSpace. The evaluated configuration defines the metric simulation scene frame to coincide with CameraSpace, so the checked-in operational calibration `FastSAMRealtime/configs/calibration/kinect_camera_space_to_scene.json` is the identity transform by frame definition. This file is loaded by default and records its provenance explicitly; `DGSRSIM_T_SCENE_FROM_CAMERA` can override it with a measured `4 x 4` rigid calibration for another setup.
+
+AABB normalization is carried through the full state chain. Registration constructs `Q_normalized = c_source + s * (Q_raw - c_target)`, records the corresponding similarity matrix, and uses the normalized target in both RANSAC and GICP. The accepted state writer emits `object_state.json`, including the rigid normalized-target pose, `scale_raw_to_normalized`, normalization centers, and the complete `A_scene_from_asset_raw` similarity transform. The simulation-side `ObjectStateFileStream` consumes this JSON packet and applies the same scale to the raw converted asset; the legacy `T_tgt_to_scene.npy` file remains only as a rigid-pose fallback.
 
 `third_party/3dgrut_conversion/` keeps only the conversion-chain code used by this project. It converts Gaussian PLY outputs from `GaussianModel` into `mesh.ply` and then into simulation-side USD/USDZ or collision assets. This conversion code is adapted from the export and asset-conversion workflow of the 3DGRUT / 3D Gaussian Ray Tracing project. The original 3DGRUT README, full project, and unrelated files are not included. Citation details are provided in `THIRD_PARTY_NOTICES.md`.
 
-`Simulation/` is reorganized from LeIsaac/IsaacLab simulation-side code. It imports the converted simulation assets and synchronizes object poses or states estimated online into the simulation environment. Large USD, USDZ, PLY, and ZIP assets are not stored in GitHub; after downloading them, place them back under the corresponding paths in `Simulation/assets/`.
+`Simulation/` is reorganized from LeIsaac/IsaacLab simulation-side code. It imports converted assets and synchronizes object states estimated online into the simulation environment. The active `teleop_se3_agent.py` path reads the scale-preserving JSON state, retains the converted object in its raw shared-frame coordinates, and removes the background asset's display scale from scene placement before composing the object world transform. Large USD, USDZ, PLY, and ZIP assets are not stored in GitHub; after downloading them, place them back under the corresponding paths in `Simulation/assets/`.
 
 ## Evidence Boundary
 
@@ -48,6 +54,9 @@ The paper evaluates reconstruction quality, pose estimation, and visual synchron
 - PSNR, SSIM, and LPIPS measure rendering or visual-consistency quality; they are not physical interaction metrics.
 - The minimal pick demonstration is an interface-chain record, not a robot task-reliability experiment.
 - Fig. 8 in the manuscript is treated as a supplementary load diagnostic, not as a complete per-object, per-frame runtime scaling law.
+- The public repository does not contain the itemized offline-evaluation manifest or per-frame outputs needed to recompute the aggregate values in Tables 2-4, 6, and 7.
+
+The exact provenance boundary and the table-derived Fig. 8 values are recorded in `docs/EVIDENCE_PROVENANCE.md` and `docs/figure8_table_derived_diagnostic.csv`.
 
 ## Large Files and Data
 
@@ -88,12 +97,17 @@ CUDA, PyTorch, Isaac Sim/IsaacLab, Kinect SDK, and GPU driver versions should be
 cd GaussianModel
 python convert.py -s data/<scene_name>
 bash script/prepare_pseudo_label0.sh <scene_name> <gpu_id>
-bash script/train.sh <scene_name> <gpu_id>
+bash script/train.sh <scene_name> <image_scale>
 ```
 
 2. Use `GaussianModel` to output object-level and background/object-decoupled Gaussian PLY assets in a shared world frame.
 
-3. Use `FastSAMRealtime/` for strict Kinect RGB-D alignment, segmentation, object point-cloud cropping, registration-quality filtering, and coarse-to-fine registration.
+3. Use `FastSAMRealtime/` for strict Kinect RGB-D alignment, segmentation, object point-cloud cropping, registration-quality filtering, and coarse-to-fine registration. The default calibration can be overridden for another installation:
+
+```bash
+set DGSRSIM_T_SCENE_FROM_CAMERA=path\to\measured_camera_to_scene.json
+python FastSAMRealtime\rt_seg_strict_align_cut_object_pcd5.py
+```
 
 4. Use `third_party/3dgrut_conversion/` to convert Gaussian PLY files into simulation-side mesh or USD/USDZ assets. Example:
 
@@ -105,7 +119,7 @@ python third_party/3dgrut_conversion/gaussian_ply_to_3dgrut_mesh_ply.py \
 
 To use the original 3DGRUT export path `python -m threedgrut.export.scripts.ply_to_usd`, prepare a complete 3DGRUT runtime environment separately.
 
-5. Place the externally downloaded simulation assets under `Simulation/assets/`, then run the LeIsaac/IsaacLab task scripts for simulation import and object-state synchronization. The scene can be composed from a background asset, movable object assets, and robot assets; object addition, removal, and replacement are handled at the asset level.
+5. Place the externally downloaded simulation assets under `Simulation/assets/`, then run `Simulation/scripts/environments/teleoperation/teleop_se3_agent.py`. It reads `FastSAMRealtime/rt_ply_out/object_state.json` by default and uses `T_tgt_to_scene.npy` only when the JSON state is unavailable. The scene can be composed from a background asset, movable object assets, and robot assets; object addition, removal, and replacement are handled at the asset level.
 
 ## Third-Party Code
 

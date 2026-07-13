@@ -1,3 +1,4 @@
+import argparse
 from PIL import Image
 import os
 
@@ -31,14 +32,19 @@ def batch_resize_images(input_dir, output_dir, target_size=(1500, 1000)):
 
 
 if __name__ == "__main__":
-    # 输入目录（存放原始图片的文件夹）
-    input_dir = "/home/ubuntu/Desktop/gaussian-grouping01/data/baowenbei/input"
-    # 输出目录（存放缩放后图片的文件夹，可自行修改）
-    output_dir = "/home/ubuntu/Desktop/gaussian-grouping01/data/baowenbei/resized_output"
+    parser = argparse.ArgumentParser(description="Resize all images in a directory.")
+    parser.add_argument("--input", required=True, help="Input image directory")
+    parser.add_argument("--output", required=True, help="Output image directory")
+    parser.add_argument("--width", type=int, default=1500)
+    parser.add_argument("--height", type=int, default=1000)
+    args = parser.parse_args()
+
+    input_dir = args.input
+    output_dir = args.output
 
     # 检查输入目录是否存在
     if not os.path.isdir(input_dir):
         print(f"错误：输入目录不存在 - {input_dir}")
     else:
-        batch_resize_images(input_dir, output_dir)
+        batch_resize_images(input_dir, output_dir, (args.width, args.height))
         print("批量处理完成！")

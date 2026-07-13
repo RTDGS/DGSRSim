@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 import open3d as o3d
 import numpy as np
 
@@ -41,26 +42,9 @@ def inspect_ply(path: str):
 
 
 
-# 👉 直接在这里改路径
-# PLY_PATH = r"E:\code\FastSAM\rt_ply_out\object_1774005719631.ply"   # 宇航员
-# PLY_PATH = r"E:\code\FastSAM\rt_ply_out\object_1774005743584.ply"   # 宇航员
-#
-# PLY_PATH = r"E:\code\FastSAM\rt_ply_out\object_1774005754857.ply"   # 宇航员
-# PLY_PATH = r"E:\code\FastSAM\rt_ply_out\object_1774005763032.ply"   # 宇航员
-# PLY_PATH = r"E:\code\FastSAM\rt_ply_out\object_1774005771207.ply"   # 宇航员
-#
-# PLY_PATH = r"E:\code\FastSAM\rt_ply_out\object_1774006297998.ply"   # 乒乓球
-# PLY_PATH = r"E:\code\FastSAM\rt_ply_out\object_1774006306352.ply"   # 乒乓球
-#
-#
-# PLY_PATH = r"E:\code\FastSAM\rt_ply_out\object_1774007087764.ply"   # 锅
-# PLY_PATH = r"E:\code\FastSAM\rt_ply_out\object_1774007096586.ply"   # 锅
-# PLY_PATH = r"E:\code\FastSAM\rt_ply_out\object_1774007131639.ply"   # 锅
-# PLY_PATH = r"E:\code\FastSAM\rt_ply_out\BALL_point_cloud1.ply"
-# PLY_PATH = r"E:\code\FastSAM\rt_ply_out\BALL_point_cloud.ply"
-# PLY_PATH = r"E:\code\FastSAM\rt_ply_out\guo_point_cloud.ply"
-PLY_PATH = r"E:\code\FastSAM\rt_ply_out\Yumipoint_cloud.ply"
-#PLY_PATH = r"E:\code\FastSAM\rt_ply_out\object_1774280247462.ply"
-#PLY_PATH = r"E:\code\FastSAM\rt_ply_out\plant.ply"
+# Select another asset with DGSRSIM_TARGET_PLY; no machine-specific path is required.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_RT_OUT = os.environ.get("DGSRSIM_RT_PLY_OUT", os.path.join(_HERE, "rt_ply_out"))
+PLY_PATH = os.environ.get("DGSRSIM_TARGET_PLY", os.path.join(_RT_OUT, "Yumipoint_cloud.ply"))
 if __name__ == "__main__":
     inspect_ply(PLY_PATH)

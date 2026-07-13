@@ -6,7 +6,7 @@ Factory utilities for spawning:
 - /World/envs/env_i/RuntimeMug_proxy  (rigid body proxy)
 - visual under proxy (USDZ reference)
 - collision disable under visual
-- auto-fit visual scale to a target size
+- either auto-fit visual scale or retain raw asset coordinates for state similarity
 - set proxy rigidbody kinematic for absolute pose driving
 
 Depends on:
@@ -46,6 +46,7 @@ class RuntimeMugSpec:
 
     # proxy physical size (also used as "target size" for auto-fit by default)
     target_visual_size_m: Tuple[float, float, float] = (0.08, 0.08, 0.12)
+    proxy_size_asset_units: Optional[Tuple[float, float, float]] = None
 
     density: float = 300.0
     proxy_visible: bool = True
@@ -57,6 +58,7 @@ class RuntimeMugSpec:
     # auto-fit
     auto_fit_axis: AutoFitAxis = "z"
     extra_visual_scale: float = 1.0  # optional multiplier after auto-fit
+    consume_state_similarity: bool = False
 
     # rigidbody
     kinematic: bool = True
@@ -97,11 +99,16 @@ def spawn_runtime_mug_for_env(stage, env_root: str, spec: RuntimeMugSpec) -> dic
     usdz_abs = str(Path(spec.usdz_path))
 
     # 1) proxy rigid box（geom 子节点也做手动 TR）
+    proxy_size = (
+        tuple(spec.proxy_size_asset_units)
+        if spec.consume_state_similarity and spec.proxy_size_asset_units is not None
+        else tuple(spec.target_visual_size_m)
+    )
     create_proxy_rigid_box(
         prim_path=proxy_path,
         pos=tuple(spec.proxy_pos),
         quat_wxyz=tuple(spec.proxy_quat_wxyz),
-        size_xyz=tuple(spec.target_visual_size_m),
+        size_xyz=proxy_size,
         density=float(spec.density),
         visible=bool(spec.proxy_visible),
         geom_local_pos=tuple(spec.geom_local_pos),
@@ -119,9 +126,12 @@ def spawn_runtime_mug_for_env(stage, env_root: str, spec: RuntimeMugSpec) -> dic
     # 3) disable collisions under visual
     disable_collisions_under(visual_path)
 
-    # 4) compute fit scale
+    # 4) keep raw asset coordinates for a scale-preserving state packet, or auto-fit
     cur = get_prim_world_aabb_size(stage, visual_path)
-    s_fit = _compute_fit_scale(cur, spec.target_visual_size_m, spec.auto_fit_axis)
+    if spec.consume_state_similarity:
+        s_fit = float(spec.visual_base_scale)
+    else:
+        s_fit = _compute_fit_scale(cur, spec.target_visual_size_m, spec.auto_fit_axis)
     s_final = float(s_fit) * float(spec.extra_visual_scale)
 
     # 4.1) 一次性写入 visual 的 local TRS（关键：避免覆盖）
@@ -143,6 +153,7 @@ def spawn_runtime_mug_for_env(stage, env_root: str, spec: RuntimeMugSpec) -> dic
         "proxy_path": proxy_path,
         "visual_path": visual_path,
         "fit_scale": float(s_final),
+        "scale_mode": "state_similarity" if spec.consume_state_similarity else "auto_fit",
         "cur_size": tuple(float(x) for x in cur),
         "new_size": tuple(float(x) for x in new_size),
     }

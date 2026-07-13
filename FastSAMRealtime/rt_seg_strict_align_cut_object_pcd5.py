@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 
+import hashlib
+import json
 import os
 import time
-from typing import Optional
+from pathlib import Path
+from typing import Any, Dict, Optional
 
 import cv2
 import numpy as np
@@ -12,7 +15,13 @@ from kinectv2_capture_service import start_capture, stop_capture, get_latest_fra
 # ============================================================
 # Externalized helpers
 # ============================================================
-from utils.pose_utils import pretty_pose
+from utils.pose_utils import (
+    compose_asset_to_scene,
+    compose_target_to_scene,
+    load_transform_4x4,
+    pretty_pose,
+    pretty_similarity,
+)
 from utils.seg_selection_helpers import ensure_masks_match_color
 
 # ============================================================
@@ -61,12 +70,33 @@ def atomic_save_text(path: str, text: str):
     os.replace(tmp_path, path)
 
 
+def atomic_save_json(path: str, payload: Dict[str, Any]):
+    """Write JSON atomically."""
+    atomic_save_text(path, json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+
+def sha256_file(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 # ============================================================
 # Main processor
 # ============================================================
 
 class MyProcessor:
-    def __init__(self, fastsam_model_path: str, thresh_ply: str, flip_y: bool = False, flip_z: bool = False):
+    def __init__(
+        self,
+        fastsam_model_path: str,
+        thresh_ply: str,
+        T_scene_from_camera: np.ndarray,
+        calibration_info: Optional[Dict[str, Any]] = None,
+        flip_y: bool = False,
+        flip_z: bool = False,
+    ):
         # Kinect capture
         start_capture(preview=True, fps=10)
 
@@ -116,7 +146,13 @@ class MyProcessor:
 
         self.flip_y = bool(flip_y)
         self.flip_z = bool(flip_z)
+        self.T_scene_from_camera = np.asarray(T_scene_from_camera, dtype=np.float64)
+        self.calibration_info = dict(calibration_info or {})
+        self.target_asset_name = Path(thresh_ply).name
+        self.target_asset_sha256 = sha256_file(thresh_ply)
         print(f"[Align] flip_y={self.flip_y} flip_z={self.flip_z}")
+        print("[Frames] calibrated T_scene_from_camera")
+        print(pretty_pose(self.T_scene_from_camera))
 
         # ============================================================
         # Registration params
@@ -188,7 +224,10 @@ class MyProcessor:
         self._last_obj_xyz: Optional[np.ndarray] = None
         self._last_obj_rgb: Optional[np.ndarray] = None
 
-        self.OUT_DIR = os.path.join(".", "rt_ply_out")
+        self.OUT_DIR = os.environ.get(
+            "DGSRSIM_RT_PLY_OUT",
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "rt_ply_out"),
+        )
         os.makedirs(self.OUT_DIR, exist_ok=True)
 
         self._last_pose_ts_printed: float = -1.0
@@ -197,19 +236,79 @@ class MyProcessor:
 
         self._printed_shapes = False
 
-    def _save_pose(self, T_tgt_to_scene: np.ndarray):
+    def _save_pose(
+        self,
+        T_normalized_tgt_to_scene: np.ndarray,
+        A_asset_raw_to_scene: np.ndarray,
+        metrics: Dict[str, Any],
+    ):
         npy_path = os.path.join(self.OUT_DIR, "T_tgt_to_scene.npy")
+        similarity_path = os.path.join(self.OUT_DIR, "A_asset_raw_to_scene.npy")
+        state_path = os.path.join(self.OUT_DIR, "object_state.json")
         txt_path = os.path.join(self.OUT_DIR, "latest_pose.txt")
 
-        T64 = np.asarray(T_tgt_to_scene, dtype=np.float64)
+        T64 = np.asarray(T_normalized_tgt_to_scene, dtype=np.float64)
+        A64 = np.asarray(A_asset_raw_to_scene, dtype=np.float64)
+        timestamp = time.time()
 
         atomic_save_npy(npy_path, T64)
-        atomic_save_text(txt_path, pretty_pose(T64) + "\n")
+        atomic_save_npy(similarity_path, A64)
+        state_payload = {
+            "schema": "dgsrsim.object_state.v1",
+            "timestamp_unix": timestamp,
+            "frames": {
+                "observation": "Kinect CameraSpace (meters)",
+                "normalized_target": "metric registration target",
+                "asset_raw": "shared Gaussian asset coordinates",
+                "scene": "metric simulation scene frame",
+            },
+            "T_scene_from_normalized_target": T64.tolist(),
+            "A_scene_from_asset_raw": A64.tolist(),
+            "normalization": {
+                "scale_raw_to_normalized": float(metrics["scale_applied_to_target"]),
+                "source_center_camera_m": metrics["source_center_camera_m"],
+                "target_center_asset_raw": metrics["target_center_asset_raw"],
+                "target_extent_asset_raw": metrics["target_extent_asset_raw"],
+                "target_extent_normalized_m": metrics["target_extent_normalized_m"],
+                "A_normalized_target_from_asset_raw": metrics[
+                    "A_normalized_target_from_asset_raw"
+                ],
+            },
+            "calibration": self.calibration_info,
+            "target_asset": {
+                "file_name": self.target_asset_name,
+                "sha256": self.target_asset_sha256,
+            },
+            "registration": {
+                key: metrics.get(key)
+                for key in (
+                    "ransac_fitness",
+                    "ransac_rmse",
+                    "gicp_fitness",
+                    "gicp_rmse",
+                    "src_n",
+                    "tgt_n",
+                    "voxel",
+                    "max_corr",
+                )
+            },
+        }
+        atomic_save_json(state_path, state_payload)
+        atomic_save_text(
+            txt_path,
+            "T_scene_from_normalized_target\n"
+            + pretty_pose(T64)
+            + "\n\nA_scene_from_asset_raw\n"
+            + pretty_similarity(A64)
+            + "\n",
+        )
 
         ts_path = os.path.join(self.OUT_DIR, "pose_ts.txt")
-        atomic_save_text(ts_path, f"{time.time():.6f}\n")
+        atomic_save_text(ts_path, f"{timestamp:.6f}\n")
 
         print(f"[PoseSaved] {npy_path}")
+        print(f"[PoseSaved] {similarity_path}")
+        print(f"[PoseSaved] {state_path}")
         print(f"[PoseSaved] {txt_path}")
 
     def run_once(self) -> bool:
@@ -325,7 +424,18 @@ class MyProcessor:
                 self.match_viewer.set_aligned_src(src_aligned, reset_view=self._match_first_show)
                 self._match_first_show = False
 
-            T_tgt_to_scene = np.linalg.inv(np.asarray(T_src_to_tgt, dtype=np.float64))
+            # Registration maps the observed CameraSpace source into the target
+            # asset frame. Its inverse maps the target asset into CameraSpace;
+            # the calibrated camera-to-scene extrinsic closes the frame chain.
+            T_tgt_to_scene = compose_target_to_scene(
+                self.T_scene_from_camera,
+                np.asarray(T_src_to_tgt, dtype=np.float64),
+            )
+            A_asset_raw_to_scene = compose_asset_to_scene(
+                self.T_scene_from_camera,
+                np.asarray(T_src_to_tgt, dtype=np.float64),
+                np.asarray(metrics["A_normalized_target_from_asset_raw"], dtype=np.float64),
+            )
 
             if abs(float(mts) - float(self._last_pose_ts_printed)) > 1e-6:
                 self._last_pose_ts_printed = float(mts)
@@ -340,9 +450,11 @@ class MyProcessor:
                     print("[RegMetrics] src_prep=", metrics.get("src_prep"))
                 if "tgt_prep" in metrics:
                     print("[RegMetrics] tgt_prep=", metrics.get("tgt_prep"))
-                print("[Pose] T_tgt_to_scene (= inv(T_src_to_tgt))")
+                print("[Pose] T_tgt_to_scene (= T_scene_from_camera @ inv(T_src_to_tgt))")
                 print(pretty_pose(T_tgt_to_scene))
-                self._save_pose(T_tgt_to_scene)
+                print("[State] A_asset_raw_to_scene retains the registration scale")
+                print(pretty_similarity(A_asset_raw_to_scene))
+                self._save_pose(T_tgt_to_scene, A_asset_raw_to_scene, metrics)
         else:
             if metrics and metrics.get("reason") not in (None, "") and (self._n % 60 == 0):
                 print("[Reg] last status:", metrics)
@@ -393,8 +505,59 @@ class MyProcessor:
 
 
 if __name__ == "__main__":
-    FASTSAM_MODEL = r"E:\code\FastSAM\weights\FastSAM-x.pt"
-    THRESH_PLY = r"C:\Users\quyuanjin\Downloads\2.ply"
+    _HERE = os.path.dirname(os.path.abspath(__file__))
+    FASTSAM_MODEL = os.environ.get(
+        "DGSRSIM_FASTSAM_MODEL",
+        os.path.join(_HERE, "weights", "FastSAM-x.pt"),
+    )
+    THRESH_PLY = os.environ.get(
+        "DGSRSIM_TARGET_PLY",
+        os.path.join(_HERE, "rt_ply_out", "astronaut.ply"),
+    )
+
+    default_calibration_path = os.path.join(
+        _HERE,
+        "configs",
+        "calibration",
+        "kinect_camera_space_to_scene.json",
+    )
+    camera_to_scene_path = os.environ.get(
+        "DGSRSIM_T_SCENE_FROM_CAMERA",
+        default_calibration_path,
+    ).strip()
+    camera_is_scene_frame = os.environ.get("DGSRSIM_CAMERA_IS_SCENE_FRAME", "0").strip() == "1"
+    if camera_to_scene_path:
+        T_SCENE_FROM_CAMERA = load_transform_4x4(camera_to_scene_path)
+        calibration_info = {
+            "file_name": Path(camera_to_scene_path).name,
+            "sha256": sha256_file(camera_to_scene_path),
+        }
+        if Path(camera_to_scene_path).suffix.lower() == ".json":
+            calibration_payload = json.loads(Path(camera_to_scene_path).read_text(encoding="utf-8"))
+            if isinstance(calibration_payload, dict):
+                for key in (
+                    "calibration_id",
+                    "calibration_type",
+                    "source_frame",
+                    "target_frame",
+                    "units",
+                    "provenance",
+                ):
+                    if key in calibration_payload:
+                        calibration_info[key] = calibration_payload[key]
+    elif camera_is_scene_frame:
+        T_SCENE_FROM_CAMERA = np.eye(4, dtype=np.float64)
+        calibration_info = {
+            "calibration_type": "explicit_runtime_frame_coincidence",
+            "source_frame": "Kinect CameraSpace",
+            "target_frame": "metric simulation scene frame",
+        }
+        print("[Frames] DGSRSIM_CAMERA_IS_SCENE_FRAME=1; using an explicitly declared identity extrinsic.")
+    else:
+        raise RuntimeError(
+            "Set DGSRSIM_T_SCENE_FROM_CAMERA to a calibrated 4x4 NPY/JSON/text transform. "
+            "Use DGSRSIM_CAMERA_IS_SCENE_FRAME=1 only when the simulation scene frame is explicitly defined as CameraSpace."
+        )
 
     FLIP_Y = False
     FLIP_Z = False
@@ -402,6 +565,8 @@ if __name__ == "__main__":
     p = MyProcessor(
         fastsam_model_path=FASTSAM_MODEL,
         thresh_ply=THRESH_PLY,
+        T_scene_from_camera=T_SCENE_FROM_CAMERA,
+        calibration_info=calibration_info,
         flip_y=FLIP_Y,
         flip_z=FLIP_Z
     )

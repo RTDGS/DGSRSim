@@ -3,13 +3,14 @@
 leisaac/utils/pose_sync_pipeline.py
 
 Pose Sync pipeline split-out:
-- Poll .npy 4x4 pose file (T_scene_mug)
+- Poll the JSON object-state packet, with a legacy .npy pose fallback
 - Maintain pose sync state:
     - pose_sync_enabled (default True)
     - freeze_when_sync_off
     - manual_override (None/True/False) for rule-grasp priority
-- Apply pose into USD each step:
-    - compute T_world_mug = T_world_scene @ T_scene_mug
+- Apply state into USD each step:
+    - separate rigid scene placement from background-asset scale
+    - compute A_world_asset = T_world_scene_placement @ A_scene_asset_raw
     - set RuntimeMug_proxy prim world transform
     - optional freeze when sync is OFF
 
@@ -20,15 +21,18 @@ Expected external deps:
 
 from __future__ import annotations
 
+import json
 import os
 import time
 import threading
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, Optional
 
 import numpy as np
 
 from leisaac.utils.physics_prims import get_world_xf, set_prim_world_matrix
+from leisaac.utils.state_transform import rigid_scene_placement, validate_similarity_matrix
 
 
 class NpyPoseFileStream:
@@ -80,9 +84,79 @@ class NpyPoseFileStream:
             time.sleep(dt)
 
 
+class ObjectStateFileStream:
+    """Poll a scale-preserving JSON state packet with a legacy NPY fallback."""
+
+    def __init__(self, state_json: str, pose_npy: str, poll_hz: float = 60.0):
+        self.state_json = str(state_json)
+        self.pose_npy = str(pose_npy)
+        self.poll_hz = float(poll_hz)
+        self._lock = threading.Lock()
+        self._latest_A: Optional[np.ndarray] = None
+        self._latest_mtime = -1.0
+        self._latest_source = ""
+        self._running = False
+        self._th: Optional[threading.Thread] = None
+
+    def start(self):
+        if self._running:
+            return
+        self._running = True
+        self._th = threading.Thread(target=self._loop, daemon=True)
+        self._th.start()
+
+    def stop(self):
+        self._running = False
+        if self._th is not None:
+            self._th.join(timeout=1.0)
+            self._th = None
+
+    def get_latest(self) -> Optional[np.ndarray]:
+        with self._lock:
+            return None if self._latest_A is None else self._latest_A.copy()
+
+    def _read_candidate(self) -> tuple[Optional[np.ndarray], float, str]:
+        if self.state_json and os.path.exists(self.state_json):
+            mtime = os.path.getmtime(self.state_json)
+            payload = json.loads(Path(self.state_json).read_text(encoding="utf-8"))
+            if payload.get("schema") != "dgsrsim.object_state.v1":
+                raise ValueError("unsupported DGSRSim object-state schema")
+            matrix = validate_similarity_matrix(
+                payload["A_scene_from_asset_raw"],
+                "A_scene_from_asset_raw",
+            )
+            return matrix, mtime, self.state_json
+
+        if self.pose_npy and os.path.exists(self.pose_npy):
+            mtime = os.path.getmtime(self.pose_npy)
+            matrix = validate_similarity_matrix(
+                np.load(self.pose_npy, allow_pickle=False).astype(np.float64).reshape(4, 4),
+                "legacy_T_scene_from_target",
+            )
+            return matrix, mtime, self.pose_npy
+        return None, -1.0, ""
+
+    def _loop(self):
+        dt = 1.0 / max(self.poll_hz, 1e-6)
+        while self._running:
+            try:
+                matrix, mtime, source = self._read_candidate()
+                if matrix is not None and (
+                    mtime > self._latest_mtime or source != self._latest_source
+                ):
+                    with self._lock:
+                        self._latest_A = matrix
+                        self._latest_mtime = mtime
+                        self._latest_source = source
+            except Exception:
+                pass
+            time.sleep(dt)
+
+
 @dataclass
 class PoseSyncConfig:
-    pose_npy: str
+    state_json: str = ""
+    pose_npy: str = ""
     pose_poll_hz: float = 60.0
 
     pose_sync_key: str = "M"
@@ -114,14 +188,21 @@ class PoseSyncPipeline:
 
         self._last_world_mug_pose_by_env: Dict[int, np.ndarray] = {}
 
-        self._stream = NpyPoseFileStream(cfg.pose_npy, poll_hz=cfg.pose_poll_hz)
+        self._stream = ObjectStateFileStream(
+            cfg.state_json,
+            cfg.pose_npy,
+            poll_hz=cfg.pose_poll_hz,
+        )
 
     # -------------------------
     # lifecycle
     # -------------------------
     def start(self):
         self._stream.start()
-        print(f"[pose] streaming absolute pose from: {os.path.abspath(self.cfg.pose_npy)}")
+        if self.cfg.state_json:
+            print(f"[pose] streaming scale-preserving state from: {os.path.abspath(self.cfg.state_json)}")
+        if self.cfg.pose_npy:
+            print(f"[pose] legacy rigid-pose fallback: {os.path.abspath(self.cfg.pose_npy)}")
         print(
             f"[pose-sync] initial=ON. toggle key='{str(self.cfg.pose_sync_key).upper()}'. "
             f"freeze_off={self.freeze_when_sync_off}"
@@ -175,12 +256,12 @@ class PoseSyncPipeline:
     def step(self, stage):
         """
         Apply pose sync to all env_i:
-          if enabled -> read T_scene_mug and write RuntimeMug_proxy world matrix
+          if enabled -> read A_scene_asset_raw and write RuntimeMug_proxy world matrix
           else if freeze -> keep at last pose
         """
         if self.pose_sync_enabled:
-            T_scene_mug = self._stream.get_latest()
-            if T_scene_mug is None:
+            A_scene_asset_raw = self._stream.get_latest()
+            if A_scene_asset_raw is None:
                 return
 
             for i in range(self.num_envs):
@@ -188,9 +269,13 @@ class PoseSyncPipeline:
                 mug_path = self.cfg.mug_path_tpl.format(i=i)
                 try:
                     T_world_scene = get_world_xf(stage, scene_path)
-                    T_world_mug = T_world_scene @ np.asarray(T_scene_mug, dtype=np.float64)
-                    set_prim_world_matrix(stage, mug_path, T_world_mug)
-                    self._last_world_mug_pose_by_env[i] = T_world_mug
+                    T_world_scene_placement = rigid_scene_placement(T_world_scene)
+                    A_world_asset_raw = T_world_scene_placement @ np.asarray(
+                        A_scene_asset_raw,
+                        dtype=np.float64,
+                    )
+                    set_prim_world_matrix(stage, mug_path, A_world_asset_raw)
+                    self._last_world_mug_pose_by_env[i] = A_world_asset_raw
                 except Exception:
                     pass
             return

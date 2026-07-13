@@ -676,12 +676,27 @@ class AsyncRegistrar:
         t_prep = time.perf_counter()
 
         scale_applied = 1.0
+        source_center = np.asarray(src_used.get_center(), dtype=np.float64)
+        target_center = np.asarray(tgt_used.get_center(), dtype=np.float64)
+        target_extent_raw = np.asarray(
+            tgt_used.get_axis_aligned_bounding_box().get_extent(),
+            dtype=np.float64,
+        )
         if self.params.enable_scale_prealign:
             ds = aabb_diag(src_used)
             dt = aabb_diag(tgt_used)
             if ds > 1e-9 and dt > 1e-9:
                 scale_applied = ds / dt
                 tgt_used = scale_about_center(tgt_used, scale_applied)
+                tgt_used.translate(source_center - target_center)
+
+        target_extent_normalized = np.asarray(
+            tgt_used.get_axis_aligned_bounding_box().get_extent(),
+            dtype=np.float64,
+        )
+        normalization = np.eye(4, dtype=np.float64)
+        normalization[:3, :3] *= float(scale_applied)
+        normalization[:3, 3] = source_center - float(scale_applied) * target_center
 
         diag_src = aabb_diag(src_used)
         voxel = max(diag_src / float(self.params.fpfh_voxel_div), 1e-4)
@@ -715,11 +730,22 @@ class AsyncRegistrar:
         )
         t_gicp = time.perf_counter()
 
-        T = np.asarray(res_gicp.transformation)
+        T = np.asarray(res_gicp.transformation, dtype=np.float64)
+        transform_valid = T.shape == (4, 4) and bool(np.isfinite(T).all())
+        if transform_valid:
+            try:
+                np.linalg.inv(T)
+            except np.linalg.LinAlgError:
+                transform_valid = False
 
         metrics: Dict[str, Any] = {
             "ok": True,
             "scale_applied_to_target": float(scale_applied),
+            "source_center_camera_m": source_center.tolist(),
+            "target_center_asset_raw": target_center.tolist(),
+            "target_extent_asset_raw": target_extent_raw.tolist(),
+            "target_extent_normalized_m": target_extent_normalized.tolist(),
+            "A_normalized_target_from_asset_raw": normalization.tolist(),
             "diag_src": float(diag_src),
             "voxel": float(voxel),
             "max_corr": float(max_corr),
@@ -728,6 +754,7 @@ class AsyncRegistrar:
             "ransac_rmse": float(res_ransac.inlier_rmse),
             "gicp_fitness": float(res_gicp.fitness),
             "gicp_rmse": float(res_gicp.inlier_rmse),
+            "transform_valid": bool(transform_valid),
 
             "src_n": int(len(src_used.points)),
             "tgt_n": int(len(tgt_used.points)),
@@ -742,7 +769,10 @@ class AsyncRegistrar:
             "t_total_sec": float(t_gicp - t0),
         }
 
-        if res_gicp.fitness < 0.05:
+        if not transform_valid:
+            metrics["ok"] = False
+            metrics["reason"] = "invalid_transform"
+        elif res_gicp.fitness < 0.05:
             metrics["ok"] = False
             metrics["reason"] = "low_fitness"
 

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 import time
 import copy
 import numpy as np
@@ -132,17 +133,11 @@ def show_stagewise_preprocess(
 
 
 if __name__ == "__main__":
-    # SRC_PLY = r"E:\code\FastSAM\rt_ply_out\object_1774005719631.ply"   # 宇航员
-    # TGT_PLY = r"E:\code\FastSAM\rt_ply_out\astronaut.ply"
-    #
-    # SRC_PLY = r"E:\code\FastSAM\rt_ply_out\object_1774006297998.ply"  # 乒乓球
-    # TGT_PLY = r"E:\code\FastSAM\rt_ply_out\BALL_point_cloud1.ply"
-    #
-    # SRC_PLY = r"E:\code\FastSAM\rt_ply_out\object_1774007087764.ply"  # 锅
-    # TGT_PLY = r"E:\code\FastSAM\rt_ply_out\guo_point_cloud.ply"
-    #
-    SRC_PLY = r"E:\code\FastSAM\rt_ply_out\object_1774280247462.ply"  # 玉米
-    TGT_PLY = r"E:\code\FastSAM\rt_ply_out\Yumipoint_cloud.ply"
+    _HERE = os.path.dirname(os.path.abspath(__file__))
+    _RT_OUT = os.environ.get("DGSRSIM_RT_PLY_OUT", os.path.join(_HERE, "rt_ply_out"))
+    # Override these defaults with DGSRSIM_SOURCE_PLY and DGSRSIM_TARGET_PLY.
+    SRC_PLY = os.environ.get("DGSRSIM_SOURCE_PLY", os.path.join(_RT_OUT, "object_latest.ply"))
+    TGT_PLY = os.environ.get("DGSRSIM_TARGET_PLY", os.path.join(_RT_OUT, "Yumipoint_cloud.ply"))
 
 
 

@@ -6,13 +6,13 @@
 
 用法示例：
 1）每隔 30 帧保存 1 张
-python extract_frames.py --input /home/ubuntu/Desktop/gaussian-grouping01/data/Astronaut_video/video/input.mp4 --output /home/ubuntu/Desktop/gaussian-grouping01/data/Astronaut_video/input --every-n-frames 30
+python video_to_img.py --input data/scene/video/input.mp4 --output data/scene/input --every-n-frames 30
 
 2）每隔 2 秒保存 1 张
 python extract_frames.py --input input.mp4 --output frames --every-n-seconds 2
 
 3）总共均匀截取 20 张
-python video_to_img.py --input /home/ubuntu/Desktop/gaussian-grouping01/data/Astronaut_video/video/input.mp4 --output /home/ubuntu/Desktop/gaussian-grouping01/data/Astronaut_video/input --num-frames 100
+python video_to_img.py --input data/scene/video/input.mp4 --output data/scene/input --num-frames 100
 
 可选：
 --start-sec 5        从第 5 秒开始
@@ -30,8 +30,8 @@ import cv2
 
 def parse_args():
     parser = argparse.ArgumentParser(description="从视频中截取不同帧图片")
-    parser.add_argument("--input", required=True, help="/home/ubuntu/Desktop/gaussian-grouping01/data/Astronaut_video/video/input.mp4")
-    parser.add_argument("--output", default="frames", help="/home/ubuntu/Desktop/gaussian-grouping01/data/Astronaut_video/input")
+    parser.add_argument("--input", required=True, help="Input video path")
+    parser.add_argument("--output", default="frames", help="Output frame directory")
     parser.add_argument("--prefix", default="frame", help="输出图片名前缀")
     parser.add_argument("--ext", default="jpg", choices=["jpg", "png"], help="输出图片格式")
     parser.add_argument("--jpg-quality", type=int, default=95, help="JPG质量，1~100")

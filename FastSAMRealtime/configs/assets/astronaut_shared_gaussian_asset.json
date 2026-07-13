@@ -1,0 +1,20 @@
+{
+  "schema": "dgsrsim.gaussian_asset_profile.v1",
+  "asset_id": "astronaut-shared-gaussian-subset",
+  "coordinate_frame": "shared Gaussian reconstruction frame",
+  "source_ply": {
+    "file_name": "astronaut.ply",
+    "sha256": "ffd0d63576304d61855052151e4d2a94cd10bf693cd83e3b459b2572632ee95d",
+    "vertex_count": 87303,
+    "aabb_min": [-0.3480612337589264, -0.4990263283252716, 1.6493574380874634],
+    "aabb_max": [0.6956687569618225, 1.770503044128418, 3.718141555786133],
+    "aabb_extent": [1.043729990720749, 2.2695293724536896, 2.0687841176986694],
+    "aabb_diagonal": 3.2434555017145272
+  },
+  "simulation_asset": {
+    "file_name": "2.usdz",
+    "sha256": "4a8a10477e3d8839dd397ddbf3df5fff26fb57d1990b1cea8bb4e27f6ecea765",
+    "meters_per_unit": 1.0,
+    "source_relation": "Converted from the same shared-frame Gaussian asset. Runtime auto-fit is disabled when the full object-state similarity transform is consumed."
+  }
+}

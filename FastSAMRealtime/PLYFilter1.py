@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 import numpy as np
 from plyfile import PlyData, PlyElement
 from scipy.spatial import cKDTree
@@ -142,9 +143,11 @@ def dense_core_box_crop(
 
 if __name__ == "__main__":
     import argparse
+    _HERE = os.path.dirname(os.path.abspath(__file__))
+    _RT_OUT = os.environ.get("DGSRSIM_RT_PLY_OUT", os.path.join(_HERE, "rt_ply_out"))
     ap = argparse.ArgumentParser()
-    ap.add_argument("--in_ply", default=r'E:\code\FastSAM\rt_ply_out\yumi.ply')
-    ap.add_argument("--out_ply", default='rt_ply_out/Yumipoint_cloud.ply')
+    ap.add_argument("--in_ply", default=os.path.join(_RT_OUT, "yumi.ply"))
+    ap.add_argument("--out_ply", default=os.path.join(_RT_OUT, "Yumipoint_cloud.ply"))
     ap.add_argument("--mode", choices=["obb", "aabb"], default="obb")
     ap.add_argument("--k", type=int, default=1)
     ap.add_argument("--core_ratio", type=float, default=0.1)

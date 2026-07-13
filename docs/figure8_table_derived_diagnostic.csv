@@ -1,0 +1,13 @@
+panel,series,x_order,x_label,x_value,y_value,unit,source,source_type
+sync_psnr,ICP-driven Simulation,1,1 object,1,30.12,dB,Table 6,table_reported_aggregate
+sync_psnr,ICP-driven Simulation,2,2 objects,2,28.03,dB,Table 6,table_reported_aggregate
+sync_psnr,ICP-driven Simulation,3,4 objects,4,25.27,dB,Table 6,table_reported_aggregate
+sync_psnr,ICP-driven Simulation,4,8 objects,8,22.91,dB,Table 6,table_reported_aggregate
+sync_psnr,DGSRSim,1,1 object,1,30.12,dB,Table 6,table_reported_aggregate
+sync_psnr,DGSRSim,2,2 objects,2,29.11,dB,Table 6,table_reported_aggregate
+sync_psnr,DGSRSim,3,4 objects,4,27.84,dB,Table 6,table_reported_aggregate
+sync_psnr,DGSRSim,4,8 objects,8,25.96,dB,Table 6,table_reported_aggregate
+cumulative_runtime,DGSRSim,1,RGB-D preprocessing,1,12,ms,Table 7,table_reported_aggregate
+cumulative_runtime,DGSRSim,2,Pose estimation,2,48,ms,Table 7,table_reported_aggregate
+cumulative_runtime,DGSRSim,3,Simulation update,3,55,ms,Table 7,table_reported_aggregate
+cumulative_runtime,DGSRSim,4,Gaussian rendering,4,73,ms,Table 7,table_reported_aggregate

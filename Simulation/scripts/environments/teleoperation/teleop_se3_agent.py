@@ -2,7 +2,7 @@
 """
 teleop_se3_agent.py
 
-Force-disable pose sync to test manual gizmo movement of RuntimeMug_proxy.
+Teleoperation entry with scale-preserving DGSRSim object-state synchronization.
 """
 
 import multiprocessing
@@ -11,6 +11,7 @@ if multiprocessing.get_start_method() != "spawn":
     multiprocessing.set_start_method("spawn", force=True)
 
 import argparse
+import json
 import os
 from pathlib import Path
 
@@ -68,10 +69,34 @@ parser.add_argument("--quality", action="store_true")
 
 # absolute pose npy (template/mug -> Scene)
 parser.add_argument(
+    "--state_json",
+    type=str,
+    default=os.environ.get(
+        "DGSRSIM_STATE_JSON",
+        str(Path(__file__).resolve().parents[4] / "FastSAMRealtime" / "rt_ply_out" / "object_state.json"),
+    ),
+    help="Scale-preserving DGSRSim object-state JSON produced by the online pipeline.",
+)
+parser.add_argument(
     "--pose_npy",
     type=str,
-    default="E:/code/FastSAM/rt_ply_out/T_tgt_to_scene.npy",
-    help="Path to the saved absolute pose npy (4x4): T_scene_mug (= template->scene).",
+    default=os.environ.get(
+        "DGSRSIM_POSE_NPY",
+        str(Path(__file__).resolve().parents[4] / "FastSAMRealtime" / "rt_ply_out" / "T_tgt_to_scene.npy"),
+    ),
+    help="Path to the saved absolute pose npy (4x4). Defaults to FastSAMRealtime/rt_ply_out/T_tgt_to_scene.npy.",
+)
+parser.add_argument(
+    "--asset_profile_json",
+    type=str,
+    default=str(
+        Path(__file__).resolve().parents[4]
+        / "FastSAMRealtime"
+        / "configs"
+        / "assets"
+        / "astronaut_shared_gaussian_asset.json"
+    ),
+    help="Asset profile that binds the target PLY and simulation USDZ to one raw coordinate frame.",
 )
 parser.add_argument("--pose_poll_hz", type=float, default=60.0, help="Polling frequency for pose npy file updates.")
 
@@ -149,9 +174,9 @@ from leisaac.utils.geometry_utils import quat_wxyz_from_euler_deg
 
 
 # ============================================================
-# Force-disable Pose Sync (for manual test)
+# Emergency switch retained for local diagnosis; the released path keeps sync enabled.
 # ============================================================
-FORCE_DISABLE_POSE_SYNC = True
+FORCE_DISABLE_POSE_SYNC = False
 
 
 # ============================================================
@@ -248,6 +273,7 @@ def main():  # noqa: C901
     # Pose Sync pipeline (created, but FORCE disabled)
     # -----------------------------
     pose_sync_cfg = PoseSyncConfig(
+        state_json=args_cli.state_json,
         pose_npy=args_cli.pose_npy,
         pose_poll_hz=args_cli.pose_poll_hz,
         pose_sync_key=str(args_cli.pose_sync_key).upper(),
@@ -307,30 +333,29 @@ def main():  # noqa: C901
     # -----------------------------
     q_mug = quat_wxyz_from_euler_deg(0.0, 0.0, 0.0)
     usdz_abs = str(Path(ASSETS_ROOT) / "scenes" / "my_scene" / "2.usdz")
-    visual_quat = quat_wxyz_from_euler_deg(
-        roll_deg=40.0,  # 绕 X 轴
-        pitch_deg=-7.0,  # 绕 Y 轴
-        yaw_deg=0.0,  # 绕 Z 轴
-    )
+    asset_profile = json.loads(Path(args_cli.asset_profile_json).read_text(encoding="utf-8"))
+    raw_extent = tuple(float(v) for v in asset_profile["source_ply"]["aabb_extent"])
     mug_spec = RuntimeMugSpec(
         proxy_name="RuntimeMug_proxy",
         visual_child_name="visual",
         proxy_pos=(1.05, -0.46, -0.277),
         proxy_quat_wxyz=q_mug,
         target_visual_size_m=(0.08, 0.08, 0.12),
+        proxy_size_asset_units=raw_extent,
         density=300.0,
         proxy_visible=True,
         usdz_path=usdz_abs,
         visual_base_scale=1.0,
         auto_fit_axis="z",
         extra_visual_scale=1.0,
+        consume_state_similarity=True,
         kinematic=True,
         disable_gravity=True,
 
 
         # visual 对齐：局部平移 + 局部旋转
-        visual_local_pos=(0.00, 0.082, 0.12),
-        visual_local_quat_wxyz=visual_quat,  # 先不转，确定平移 OK 再转
+        visual_local_pos=(0.0, 0.0, 0.0),
+        visual_local_quat_wxyz=(1.0, 0.0, 0.0, 0.0),
 
         # geom 对齐：局部平移 + 局部旋转（让 box 贴合物体朝向）
         geom_local_pos=(0.00, 0.00, 0.0),

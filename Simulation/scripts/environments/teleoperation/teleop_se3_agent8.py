@@ -59,8 +59,11 @@ parser.add_argument("--quality", action="store_true")
 parser.add_argument(
     "--pose_npy",
     type=str,
-    default="E:/code/FastSAM/rt_ply_out/T_tgt_to_scene.npy",
-    help="Path to the saved absolute pose npy (4x4): T_scene_mug (= template->scene).",
+    default=os.environ.get(
+        "DGSRSIM_POSE_NPY",
+        str(Path(__file__).resolve().parents[4] / "FastSAMRealtime" / "rt_ply_out" / "T_tgt_to_scene.npy"),
+    ),
+    help="Path to the saved absolute pose npy (4x4). Defaults to FastSAMRealtime/rt_ply_out/T_tgt_to_scene.npy.",
 )
 parser.add_argument("--pose_poll_hz", type=float, default=60.0, help="Polling frequency for pose npy file updates.")
 

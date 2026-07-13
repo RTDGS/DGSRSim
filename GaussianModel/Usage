@@ -62,7 +62,7 @@ cd ..
 #执行前需要修改select_obj_id
 bash script/edit_object_inpaint.sh output/ball-com config/object_inpaint/bear.json  
 #step4
-python metrics1.py -r /home/ubuntu/Desktop/gaussian-grouping01/output/garden/train/ours_30000/renders -g /home/ubuntu/Desktop/gaussian-grouping01/output/garden/train/ours_30000/gt
+python metrics1.py -r output/scene/train/ours_30000/renders -g output/scene/train/ours_30000/gt
   Theirs:
   SSIM :    0.9362300
   PSNR :   27.8389511
@@ -114,7 +114,6 @@ Results:
   SSIM :    0.9189047
   PSNR :   25.0616112
   LPIPS:    0.3240832
-
 
 
 

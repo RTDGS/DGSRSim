@@ -1129,7 +1129,10 @@ class MyProcessor:
         self._last_obj_xyz: Optional[np.ndarray] = None
         self._last_obj_rgb: Optional[np.ndarray] = None
 
-        self.OUT_DIR = os.path.join(".", "rt_ply_out")
+        self.OUT_DIR = os.environ.get(
+            "DGSRSIM_RT_PLY_OUT",
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "rt_ply_out"),
+        )
         os.makedirs(self.OUT_DIR, exist_ok=True)
 
         # last printed pose guard
@@ -1309,8 +1312,15 @@ class MyProcessor:
 
 
 if __name__ == "__main__":
-    FASTSAM_MODEL = r"E:\code\FastSAM\weights\FastSAM-x.pt"
-    THRESH_PLY = r"C:\Users\quyuanjin\Downloads\2.ply"
+    _HERE = os.path.dirname(os.path.abspath(__file__))
+    FASTSAM_MODEL = os.environ.get(
+        "DGSRSIM_FASTSAM_MODEL",
+        os.path.join(_HERE, "weights", "FastSAM-x.pt"),
+    )
+    THRESH_PLY = os.environ.get(
+        "DGSRSIM_TARGET_PLY",
+        os.path.join(_HERE, "rt_ply_out", "astronaut.ply"),
+    )
 
     # 关键：修复倒置。先用 (False, False)。
     # 如果你发现还是“上下”反了：把 flip_y=True 试试；

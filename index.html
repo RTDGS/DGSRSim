@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="title" content="DGSRSim: Object-Level Decoupled 3D Gaussian Assets for Robot Simulation and Online State Synchronization">
   <meta name="description" content="DGSRSim builds object-level decoupled 3D Gaussian assets, estimates online RGB-D object states, and synchronizes object states into robot simulation scenes.">
-  <meta name="keywords" content="DGSRSim, 3D Gaussian Splatting, robot simulation, RGB-D, point cloud registration, digital twin">
+  <meta name="keywords" content="DGSRSim, 3D Gaussian Splatting, robot simulation, RGB-D, point cloud registration, state synchronization">
   <meta name="robots" content="index, follow">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="DGSRSim">
@@ -94,10 +94,10 @@
       <div class="wrap narrow">
         <h2>Abstract</h2>
         <p>
-          Robot simulation and digital twins require scene representations that can be updated from real observations at the level of individual objects rather than only as whole-scene renderings. Existing 3D Gaussian Splatting methods provide efficient explicit scene representations, but their optimization is usually organized around global rendering consistency and does not explicitly yield reusable object assets for online state transfer.
+          Robot simulation requires reusable scene assets whose states can be updated from real observations at object granularity. Existing 3D Gaussian Splatting pipelines primarily optimize whole-scene rendering and leave object-background responsibility and simulation-side state transfer under-specified.
         </p>
         <p>
-          DGSRSim addresses this representation-to-state gap with an object-centric 3D Gaussian pipeline that decouples movable object assets from the background field in a shared world frame. Online RGB-D observations are converted into object-level point clouds for coarse-to-fine registration and state writing. The study supports object-level reconstruction, state estimation, and simulation-side synchronization as an implementation path; robot task reliability and physical interaction metrics remain outside the current evaluation scope.
+          DGSRSim constructs movable object Gaussian assets and a background field in a shared world frame, then converts online RGB-D observations into object point clouds for coarse-to-fine registration and quality-filtered state writing. The reported evidence supports object-level reconstruction and appearance-level simulation synchronization under the evaluated configuration; robot-task reliability and physical interaction remain outside the evaluation scope.
         </p>
       </div>
     </section>
@@ -208,17 +208,19 @@
           </article>
           <article>
             <h3>Pose Estimation</h3>
-            <p>Object-state estimation is evaluated on the current online test sequences and compared with classical and strong registration baselines.</p>
+            <p>Object-state estimation is reported on the current online test sequence and compared quantitatively with the two classical geometric baselines listed in the manuscript.</p>
           </article>
           <article>
             <h3>Synchronization Scope</h3>
-            <p>The average stage-wise cost is approximately 73 ms/frame under the reported configuration, supporting online interaction potential without claiming task-level reliability.</p>
+            <p>The reported stage means sum to approximately 73 ms per processed update. This supports online interaction potential, but the arithmetic reciprocal is not measured loop throughput.</p>
           </article>
         </div>
         <ul class="scope-list">
           <li>Fig. 8 in the manuscript is a supplementary load diagnostic, not a complete per-object, per-frame runtime scaling law.</li>
           <li>The minimal pick demonstration records an interface chain; it is not used as a grasp-success or robot-task reliability metric.</li>
+          <li>The released path captures at 10 fps, updates the cached object cloud at up to 5 Hz, and triggers selected-object registration on demand.</li>
           <li>Physical contact stability, collision penetration, and long-horizon closed-loop manipulation require independent task-level protocols.</li>
+          <li>The public repository does not include the itemized manifest or per-frame outputs needed to recompute manuscript Tables 2-4, 6, and 7.</li>
         </ul>
       </div>
     </section>
