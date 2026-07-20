@@ -188,3 +188,32 @@ def spawn_runtime_mugs_for_all_envs(
     return out
 
 
+# Generic names used by the multi-object entry point. The legacy mug-specific
+# names remain available for scripts that import them directly.
+RuntimeObjectSpec = RuntimeMugSpec
+spawn_runtime_object_for_env = spawn_runtime_mug_for_env
+
+
+def spawn_runtime_objects_for_all_envs(
+    stage,
+    num_envs: int,
+    env_root_tpl: str,
+    specs: dict[str, RuntimeObjectSpec],
+    verbose: bool = True,
+) -> dict[str, list[dict]]:
+    """Spawn every configured runtime object in each simulation environment."""
+    spawned: dict[str, list[dict]] = {}
+    for object_id, spec in specs.items():
+        spawned[object_id] = spawn_runtime_mugs_for_all_envs(
+            stage=stage,
+            num_envs=num_envs,
+            env_root_tpl=env_root_tpl,
+            spec=spec,
+            verbose=False,
+        )
+        if verbose:
+            paths = [entry["proxy_path"] for entry in spawned[object_id]]
+            print(f"[runtime-object] object_id={object_id!r} proxies={paths}")
+    return spawned
+
+

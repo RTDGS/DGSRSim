@@ -55,9 +55,9 @@ def local_geometry_consistency_loss(xyz, weights=None, k=8, max_points=2048, eps
     """
     DGSRSim background local geometry regularizer.
 
-    The paper applies this term to the independent background model. This script
-    has a single Gaussian set, so background-class probabilities are used as soft
-    weights when available.
+    The shared Gaussian field is sampled with background-class probabilities as
+    soft pair weights. The detached coordinates determine only the kNN graph;
+    gradients still propagate through the selected Gaussian centers.
     """
     if xyz.shape[0] <= k:
         return xyz.new_zeros(())
@@ -139,13 +139,10 @@ def training(
     iter_end = torch.cuda.Event(enable_timing=True)
 
     # ---------------------------------------------------------
-    # DGSRSim losses from the paper:
+    # DGSRSim shared-field objective:
     # L_object = L_obj-fg + lambda_alpha * L_obj-alpha
     # L_bg     = L_bg-rgb + lambda_bg_reg * L_bg-reg
-    #
-    # This implementation keeps Gaussian-Grouping's classifier head as an
-    # auxiliary supervision path for classifier.pth/downstream editing. Set
-    # dgsrsim_lambda_sem = 0.0 for a strict DGSRSim reconstruction objective.
+    # L_total  = L_object + L_bg + lambda_sem * L_sem
     # ---------------------------------------------------------
     lambda_alpha = float(getattr(opt, "dgsrsim_lambda_alpha", 0.10))
     lambda_bg_reg = float(getattr(opt, "dgsrsim_lambda_bg_reg", 0.50))
@@ -213,7 +210,7 @@ def training(
         radii = render_pkg["radii"]
         objects = render_pkg["render_object"]  # expected [D, H, W]
 
-        # Auxiliary 2D classification loss.
+        # Normalized semantic cross-entropy for shared-field ownership.
         gt_obj = viewpoint_cam.objects.cuda().long()
         logits = classifier(objects)
         loss_sem = cls_criterion(logits.unsqueeze(0), gt_obj.unsqueeze(0)).squeeze().mean()

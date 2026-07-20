@@ -5,6 +5,7 @@ AGENTS.md
 __pycache__/
 *.py[cod]
 .pytest_cache/
+Simulation/tests/.tmp/
 .mypy_cache/
 .ruff_cache/
 .venv/

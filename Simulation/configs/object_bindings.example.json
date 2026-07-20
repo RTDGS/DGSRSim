@@ -1,0 +1,32 @@
+{
+  "schema": "dgsrsim.simulation_object_bindings.v1",
+  "objects": {
+    "astronaut": {
+      "prim_path_template": "/World/envs/env_{i}/RuntimeMug_proxy",
+      "spawn": {
+        "enabled": true,
+        "asset_path": "scenes/my_scene/2.usdz",
+        "asset_path_base": "assets_root",
+        "asset_profile_json": "FastSAMRealtime/configs/assets/astronaut_shared_gaussian_asset.json",
+        "asset_profile_base": "project_root",
+        "initial_position_m": [1.05, -0.46, -0.277],
+        "initial_quaternion_wxyz": [1.0, 0.0, 0.0, 0.0],
+        "target_visual_size_m": [0.08, 0.08, 0.12],
+        "density_kg_m3": 300.0,
+        "proxy_visible": true
+      }
+    },
+    "pot": {
+      "prim_path_template": "/World/envs/env_{i}/RuntimePot_proxy",
+      "spawn": {
+        "enabled": false
+      }
+    },
+    "plant": {
+      "prim_path_template": "/World/envs/env_{i}/RuntimePlant_proxy",
+      "spawn": {
+        "enabled": false
+      }
+    }
+  }
+}

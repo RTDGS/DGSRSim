@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -23,6 +24,7 @@ from utils.pose_utils import (
     pretty_similarity,
 )
 from utils.seg_selection_helpers import ensure_masks_match_color
+from utils.object_state_bundle import update_object_state_bundle
 
 # ============================================================
 # Externalized (2)(3)(4)(5)
@@ -94,6 +96,7 @@ class MyProcessor:
         thresh_ply: str,
         T_scene_from_camera: np.ndarray,
         calibration_info: Optional[Dict[str, Any]] = None,
+        object_id: Optional[str] = None,
         flip_y: bool = False,
         flip_z: bool = False,
     ):
@@ -150,6 +153,14 @@ class MyProcessor:
         self.calibration_info = dict(calibration_info or {})
         self.target_asset_name = Path(thresh_ply).name
         self.target_asset_sha256 = sha256_file(thresh_ply)
+        default_object_id = Path(thresh_ply).stem
+        self.object_id = re.sub(
+            r"[^A-Za-z0-9_.-]+",
+            "_",
+            str(object_id or default_object_id).strip(),
+        ).strip("_")
+        if not self.object_id:
+            raise ValueError("DGSRSim object_id must contain at least one valid character")
         print(f"[Align] flip_y={self.flip_y} flip_z={self.flip_z}")
         print("[Frames] calibrated T_scene_from_camera")
         print(pretty_pose(self.T_scene_from_camera))
@@ -245,6 +256,7 @@ class MyProcessor:
         npy_path = os.path.join(self.OUT_DIR, "T_tgt_to_scene.npy")
         similarity_path = os.path.join(self.OUT_DIR, "A_asset_raw_to_scene.npy")
         state_path = os.path.join(self.OUT_DIR, "object_state.json")
+        states_path = os.path.join(self.OUT_DIR, "object_states.json")
         txt_path = os.path.join(self.OUT_DIR, "latest_pose.txt")
 
         T64 = np.asarray(T_normalized_tgt_to_scene, dtype=np.float64)
@@ -255,6 +267,7 @@ class MyProcessor:
         atomic_save_npy(similarity_path, A64)
         state_payload = {
             "schema": "dgsrsim.object_state.v1",
+            "object_id": self.object_id,
             "timestamp_unix": timestamp,
             "frames": {
                 "observation": "Kinect CameraSpace (meters)",
@@ -294,6 +307,7 @@ class MyProcessor:
             },
         }
         atomic_save_json(state_path, state_payload)
+        update_object_state_bundle(states_path, self.object_id, state_payload)
         atomic_save_text(
             txt_path,
             "T_scene_from_normalized_target\n"
@@ -308,6 +322,7 @@ class MyProcessor:
 
         print(f"[PoseSaved] {npy_path}")
         print(f"[PoseSaved] {similarity_path}")
+        print(f"[PoseSaved] {states_path} object_id={self.object_id}")
         print(f"[PoseSaved] {state_path}")
         print(f"[PoseSaved] {txt_path}")
 
@@ -567,6 +582,7 @@ if __name__ == "__main__":
         thresh_ply=THRESH_PLY,
         T_scene_from_camera=T_SCENE_FROM_CAMERA,
         calibration_info=calibration_info,
+        object_id=os.environ.get("DGSRSIM_OBJECT_ID"),
         flip_y=FLIP_Y,
         flip_z=FLIP_Z
     )

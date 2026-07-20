@@ -39,11 +39,11 @@ The released registration path applies FPFH + RANSAC initialization followed by 
 
 The observed Kinect point cloud is expressed in CameraSpace. The evaluated configuration defines the metric simulation scene frame to coincide with CameraSpace, so the checked-in operational calibration `FastSAMRealtime/configs/calibration/kinect_camera_space_to_scene.json` is the identity transform by frame definition. This file is loaded by default and records its provenance explicitly; `DGSRSIM_T_SCENE_FROM_CAMERA` can override it with a measured `4 x 4` rigid calibration for another setup.
 
-AABB normalization is carried through the full state chain. Registration constructs `Q_normalized = c_source + s * (Q_raw - c_target)`, records the corresponding similarity matrix, and uses the normalized target in both RANSAC and GICP. The accepted state writer emits `object_state.json`, including the rigid normalized-target pose, `scale_raw_to_normalized`, normalization centers, and the complete `A_scene_from_asset_raw` similarity transform. The simulation-side `ObjectStateFileStream` consumes this JSON packet and applies the same scale to the raw converted asset; the legacy `T_tgt_to_scene.npy` file remains only as a rigid-pose fallback.
+AABB normalization is carried through the full state chain. Registration constructs `Q_normalized = c_source + s * (Q_raw - c_target)`, records the corresponding similarity matrix, and uses the normalized target in both RANSAC and GICP. Each producer writes a legacy single-object `object_state.json` packet and atomically updates its entry in `object_states.json`. Both packets include the rigid normalized-target pose, `scale_raw_to_normalized`, normalization centers, and the complete `A_scene_from_asset_raw` similarity transform. The simulation-side `ObjectStateFileStream` consumes all active entries and applies the same per-object scale to each raw converted asset; the legacy `T_tgt_to_scene.npy` file remains only as a rigid-pose fallback.
 
 `third_party/3dgrut_conversion/` keeps only the conversion-chain code used by this project. It converts Gaussian PLY outputs from `GaussianModel` into `mesh.ply` and then into simulation-side USD/USDZ or collision assets. This conversion code is adapted from the export and asset-conversion workflow of the 3DGRUT / 3D Gaussian Ray Tracing project. The original 3DGRUT README, full project, and unrelated files are not included. Citation details are provided in `THIRD_PARTY_NOTICES.md`.
 
-`Simulation/` is reorganized from LeIsaac/IsaacLab simulation-side code. It imports converted assets and synchronizes object states estimated online into the simulation environment. The active `teleop_se3_agent.py` path reads the scale-preserving JSON state, retains the converted object in its raw shared-frame coordinates, and removes the background asset's display scale from scene placement before composing the object world transform. Large USD, USDZ, PLY, and ZIP assets are not stored in GitHub; after downloading them, place them back under the corresponding paths in `Simulation/assets/`.
+`Simulation/` is reorganized from LeIsaac/IsaacLab simulation-side code. It imports converted assets and synchronizes object states estimated online into the simulation environment. The active `teleop_se3_agent.py` path reads the scale-preserving multi-object bundle, resolves every object identifier through `Simulation/configs/object_bindings.example.json`, optionally spawns all enabled runtime assets, and writes each accepted state independently. Converted objects remain in their raw shared-frame coordinates, and scene placement removes the background display scale before composing each object world transform. Large USD, USDZ, PLY, and ZIP assets are not stored in GitHub; after downloading them, place them back under the corresponding paths in `Simulation/assets/`.
 
 ## Evidence Boundary
 
@@ -53,10 +53,10 @@ The paper evaluates reconstruction quality, pose estimation, and visual synchron
 - Online state estimation and synchronization are reported for the current online test sequences and implementation configuration.
 - PSNR, SSIM, and LPIPS measure rendering or visual-consistency quality; they are not physical interaction metrics.
 - The minimal pick demonstration is an interface-chain record, not a robot task-reliability experiment.
-- Fig. 8 in the manuscript is treated as a supplementary load diagnostic, not as a complete per-object, per-frame runtime scaling law.
-- The public repository does not contain the itemized offline-evaluation manifest or per-frame outputs needed to recompute the aggregate values in Tables 2-4, 6, and 7.
+- Fig. B.1 in the manuscript is treated as a supplementary load diagnostic, not as a complete per-object, per-frame runtime scaling law.
+- The public repository does not contain the itemized offline-evaluation manifest or per-frame outputs needed to recompute the aggregate values in Tables 2-6.
 
-The exact provenance boundary and the table-derived Fig. 8 values are recorded in `docs/EVIDENCE_PROVENANCE.md` and `docs/figure8_table_derived_diagnostic.csv`.
+The exact provenance boundary and the table-derived Fig. B.1 values are recorded in `docs/EVIDENCE_PROVENANCE.md` and `docs/figure8_table_derived_diagnostic.csv`.
 
 ## Large Files and Data
 
@@ -119,7 +119,7 @@ python third_party/3dgrut_conversion/gaussian_ply_to_3dgrut_mesh_ply.py \
 
 To use the original 3DGRUT export path `python -m threedgrut.export.scripts.ply_to_usd`, prepare a complete 3DGRUT runtime environment separately.
 
-5. Place the externally downloaded simulation assets under `Simulation/assets/`, then run `Simulation/scripts/environments/teleoperation/teleop_se3_agent.py`. It reads `FastSAMRealtime/rt_ply_out/object_state.json` by default and uses `T_tgt_to_scene.npy` only when the JSON state is unavailable. The scene can be composed from a background asset, movable object assets, and robot assets; object addition, removal, and replacement are handled at the asset level.
+5. Place the externally downloaded simulation assets under `Simulation/assets/`, declare each object ID, prim path, and optional spawn record in `Simulation/configs/object_bindings.example.json`, then run `Simulation/scripts/environments/teleoperation/teleop_se3_agent.py`. It reads `FastSAMRealtime/rt_ply_out/object_states.json` by default, applies all active object entries, and uses `T_tgt_to_scene.npy` only as a legacy fallback. Run one observation worker per tracked object with a distinct `DGSRSIM_OBJECT_ID`; the workers update the shared bundle atomically. Object addition, removal, and replacement are handled through the binding and spawn records without changing the synchronization loop.
 
 ## Third-Party Code
 

@@ -73,9 +73,24 @@ parser.add_argument(
     type=str,
     default=os.environ.get(
         "DGSRSIM_STATE_JSON",
-        str(Path(__file__).resolve().parents[4] / "FastSAMRealtime" / "rt_ply_out" / "object_state.json"),
+        str(Path(__file__).resolve().parents[4] / "FastSAMRealtime" / "rt_ply_out" / "object_states.json"),
     ),
-    help="Scale-preserving DGSRSim object-state JSON produced by the online pipeline.",
+    help="Scale-preserving DGSRSim single- or multi-object state JSON.",
+)
+parser.add_argument(
+    "--object_id",
+    type=str,
+    default=os.environ.get("DGSRSIM_OBJECT_ID", "astronaut"),
+    help="Object ID used by legacy single-object packets and pose fallback files.",
+)
+parser.add_argument(
+    "--object_bindings_json",
+    type=str,
+    default=os.environ.get(
+        "DGSRSIM_OBJECT_BINDINGS_JSON",
+        str(Path(__file__).resolve().parents[3] / "configs" / "object_bindings.example.json"),
+    ),
+    help="JSON mapping from DGSRSim object IDs to per-environment USD prim paths.",
 )
 parser.add_argument(
     "--pose_npy",
@@ -96,7 +111,7 @@ parser.add_argument(
         / "assets"
         / "astronaut_shared_gaussian_asset.json"
     ),
-    help="Asset profile that binds the target PLY and simulation USDZ to one raw coordinate frame.",
+    help="Legacy single-object asset profile, used only when --object_bindings_json is empty.",
 )
 parser.add_argument("--pose_poll_hz", type=float, default=60.0, help="Polling frequency for pose npy file updates.")
 
@@ -146,8 +161,12 @@ from leisaac.utils.constant import ASSETS_ROOT
 # env/cfg factory
 from leisaac.utils.teleop_env_factory import create_env_and_cfg
 
-# Runtime mug factory
-from leisaac.utils.runtime_mug_factory import RuntimeMugSpec, spawn_runtime_mugs_for_all_envs
+# Runtime-object factory
+from leisaac.utils.runtime_mug_factory import (
+    RuntimeObjectSpec,
+    spawn_runtime_objects_for_all_envs,
+)
+from leisaac.utils.runtime_object_config import load_runtime_object_configs
 
 # Recording utils
 from leisaac.utils.recording_utils import (
@@ -158,7 +177,11 @@ from leisaac.utils.recording_utils import (
 )
 
 # Pose Sync pipeline
-from leisaac.utils.pose_sync_pipeline import PoseSyncConfig, PoseSyncPipeline
+from leisaac.utils.pose_sync_pipeline import (
+    PoseSyncConfig,
+    PoseSyncPipeline,
+    load_object_path_templates,
+)
 
 # Rate limiter
 from leisaac.utils.rate_limiter import RateLimiter
@@ -272,10 +295,17 @@ def main():  # noqa: C901
     # -----------------------------
     # Pose Sync pipeline (created, but FORCE disabled)
     # -----------------------------
+    object_path_templates = (
+        load_object_path_templates(args_cli.object_bindings_json)
+        if args_cli.object_bindings_json
+        else {}
+    )
     pose_sync_cfg = PoseSyncConfig(
         state_json=args_cli.state_json,
         pose_npy=args_cli.pose_npy,
         pose_poll_hz=args_cli.pose_poll_hz,
+        default_object_id=args_cli.object_id,
+        object_path_templates=object_path_templates,
         pose_sync_key=str(args_cli.pose_sync_key).upper(),
         pose_sync_freeze=bool(args_cli.pose_sync_freeze),
         scene_path_tpl="/World/envs/env_{i}/Scene",
@@ -329,46 +359,80 @@ def main():  # noqa: C901
     SceneInitPipeline(scene_init_cfg).apply(env)
 
     # -----------------------------
-    # Spawn RuntimeMug_proxy + visual
+    # Spawn every runtime object declared by the ID-to-prim binding map.
     # -----------------------------
-    q_mug = quat_wxyz_from_euler_deg(0.0, 0.0, 0.0)
-    usdz_abs = str(Path(ASSETS_ROOT) / "scenes" / "my_scene" / "2.usdz")
-    asset_profile = json.loads(Path(args_cli.asset_profile_json).read_text(encoding="utf-8"))
-    raw_extent = tuple(float(v) for v in asset_profile["source_ply"]["aabb_extent"])
-    mug_spec = RuntimeMugSpec(
-        proxy_name="RuntimeMug_proxy",
-        visual_child_name="visual",
-        proxy_pos=(1.05, -0.46, -0.277),
-        proxy_quat_wxyz=q_mug,
-        target_visual_size_m=(0.08, 0.08, 0.12),
-        proxy_size_asset_units=raw_extent,
-        density=300.0,
-        proxy_visible=True,
-        usdz_path=usdz_abs,
-        visual_base_scale=1.0,
-        auto_fit_axis="z",
-        extra_visual_scale=1.0,
-        consume_state_similarity=True,
-        kinematic=True,
-        disable_gravity=True,
-
-
-        # visual 对齐：局部平移 + 局部旋转
-        visual_local_pos=(0.0, 0.0, 0.0),
-        visual_local_quat_wxyz=(1.0, 0.0, 0.0, 0.0),
-
-        # geom 对齐：局部平移 + 局部旋转（让 box 贴合物体朝向）
-        geom_local_pos=(0.00, 0.00, 0.0),
-        geom_local_quat_wxyz=(1.0, 0.0, 0.0, 0.0),
+    project_root = Path(__file__).resolve().parents[4]
+    configured_objects = (
+        load_runtime_object_configs(
+            args_cli.object_bindings_json,
+            assets_root=ASSETS_ROOT,
+            project_root=project_root,
+        )
+        if args_cli.object_bindings_json
+        else {}
     )
+    runtime_specs = {}
+    for object_id, object_cfg in configured_objects.items():
+        asset_profile = json.loads(
+            object_cfg.asset_profile_path.read_text(encoding="utf-8")
+        )
+        raw_extent = tuple(
+            float(value) for value in asset_profile["source_ply"]["aabb_extent"]
+        )
+        runtime_specs[object_id] = RuntimeObjectSpec(
+            proxy_name=object_cfg.proxy_name,
+            visual_child_name="visual",
+            proxy_pos=object_cfg.initial_position_m,
+            proxy_quat_wxyz=object_cfg.initial_quaternion_wxyz,
+            target_visual_size_m=object_cfg.target_visual_size_m,
+            proxy_size_asset_units=raw_extent,
+            density=object_cfg.density_kg_m3,
+            proxy_visible=object_cfg.proxy_visible,
+            usdz_path=str(object_cfg.usdz_path),
+            visual_base_scale=1.0,
+            auto_fit_axis="z",
+            extra_visual_scale=1.0,
+            consume_state_similarity=True,
+            kinematic=True,
+            disable_gravity=True,
+            visual_local_pos=(0.0, 0.0, 0.0),
+            visual_local_quat_wxyz=(1.0, 0.0, 0.0, 0.0),
+            geom_local_pos=(0.0, 0.0, 0.0),
+            geom_local_quat_wxyz=(1.0, 0.0, 0.0, 0.0),
+        )
 
-    spawn_runtime_mugs_for_all_envs(
-        stage=stage,
-        num_envs=env.num_envs,
-        env_root_tpl="/World/envs/env_{i}",
-        spec=mug_spec,
-        verbose=True,
-    )
+    if not args_cli.object_bindings_json:
+        asset_profile = json.loads(
+            Path(args_cli.asset_profile_json).read_text(encoding="utf-8")
+        )
+        raw_extent = tuple(
+            float(value) for value in asset_profile["source_ply"]["aabb_extent"]
+        )
+        runtime_specs[args_cli.object_id] = RuntimeObjectSpec(
+            proxy_name="RuntimeMug_proxy",
+            visual_child_name="visual",
+            proxy_pos=(1.05, -0.46, -0.277),
+            proxy_quat_wxyz=quat_wxyz_from_euler_deg(0.0, 0.0, 0.0),
+            target_visual_size_m=(0.08, 0.08, 0.12),
+            proxy_size_asset_units=raw_extent,
+            density=300.0,
+            proxy_visible=True,
+            usdz_path=str(Path(ASSETS_ROOT) / "scenes" / "my_scene" / "2.usdz"),
+            consume_state_similarity=True,
+            kinematic=True,
+            disable_gravity=True,
+        )
+
+    if runtime_specs:
+        spawn_runtime_objects_for_all_envs(
+            stage=stage,
+            num_envs=env.num_envs,
+            env_root_tpl="/World/envs/env_{i}",
+            specs=runtime_specs,
+            verbose=True,
+        )
+    else:
+        print("[runtime-object] no enabled spawn records; bound prims must already exist in the task scene")
 
     # -----------------------------
     # main loop
@@ -427,7 +491,7 @@ def main():  # noqa: C901
                 if actions is None:
                     actions = make_zero_actions(env)
 
-                # 强制同步：每帧写 RuntimeMug_proxy 位姿
+                # Apply every active object state to its configured prim.
                 if not FORCE_DISABLE_POSE_SYNC:
                     pose_sync.step(stage)
 
