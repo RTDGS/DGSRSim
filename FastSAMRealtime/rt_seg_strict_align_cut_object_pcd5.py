@@ -441,7 +441,7 @@ class MyProcessor:
 
             # Registration maps the observed CameraSpace source into the target
             # asset frame. Its inverse maps the target asset into CameraSpace;
-            # the calibrated camera-to-scene extrinsic closes the frame chain.
+            # the configured camera-to-scene transform closes the frame chain.
             T_tgt_to_scene = compose_target_to_scene(
                 self.T_scene_from_camera,
                 np.asarray(T_src_to_tgt, dtype=np.float64),
