@@ -154,7 +154,9 @@ class Events:
         enabled (bool): A flag to enable or disable Events based on certain conditions.
     """
 
-    url = 'https://www.google-analytics.com/mp/collect?measurement_id=G-X8NCJYTQXM&api_secret=QLQrATrNSwGRFRLE-cbHJw'
+    # DGSRSim public releases do not transmit analytics by default. An explicit
+    # deployment may opt in by providing the complete endpoint at runtime.
+    url = os.environ.get('DGSRSIM_ULTRALYTICS_ANALYTICS_URL', '')
 
     def __init__(self):
         """
@@ -172,6 +174,7 @@ class Events:
             'session_id': round(random.random() * 1E15),
             'engagement_time_msec': 1000}
         self.enabled = \
+            bool(self.url) and \
             SETTINGS['sync'] and \
             RANK in (-1, 0) and \
             not TESTS_RUNNING and \

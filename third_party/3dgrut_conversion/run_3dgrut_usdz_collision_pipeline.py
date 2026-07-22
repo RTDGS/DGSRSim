@@ -10,7 +10,7 @@ Pipeline:
 
 Example:
     python tools/run_3dgrut_usdz_collision_pipeline.py \
-        /media/ubuntu/L/output/hu/point_cloud_object_removal/iteration_10000/point_cloud.ply
+        path/to/point_cloud.ply
 """
 
 from __future__ import annotations
@@ -22,9 +22,6 @@ import sys
 from pathlib import Path
 
 
-DEFAULT_INPUT = "/media/ubuntu/L/output/hu/point_cloud_object_removal/iteration_10000/point_cloud.ply"
-
-
 def run(cmd: list[str], env: dict[str, str]) -> None:
     print("\n[run]", " ".join(str(part) for part in cmd), flush=True)
     subprocess.run(cmd, check=True, env=env)
@@ -32,7 +29,7 @@ def run(cmd: list[str], env: dict[str, str]) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Filter Gaussian PLY, create USDZ and mesh PLY, then add collision mesh to USDZ.")
-    parser.add_argument("input_ply", nargs="?", default=DEFAULT_INPUT)
+    parser.add_argument("input_ply")
     parser.add_argument("--out-dir", default=None, help="Defaults to input PLY directory.")
 
     parser.add_argument("--filtered-ply", default=None)

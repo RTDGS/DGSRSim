@@ -11,7 +11,7 @@ Project homepage: https://rtdgs.github.io/DGSRSim/
 - Object-level reconstruction: `GaussianModel/` partitions one shared Gaussian scene model into independently addressable object subsets and a retained background subset.
 - Online state estimation: `FastSAMRealtime/` turns RGB-D observations into object-level point clouds, applies filtering, and aligns them with asset-derived reference geometry.
 - Simulation synchronization: `Simulation/` imports converted assets and writes estimated object states into the corresponding simulation objects.
-- Scene mutability: the simulation scene can be composed from a background asset, movable object assets, and robot assets; object assets can be added, removed, replaced, or rearranged at the asset level.
+- Scene mutability: the simulation scene can be composed from a background asset, movable object assets, and robot assets. The runtime watches the binding file for add, remove, and replacement changes, while state-bundle tombstones can deactivate configured objects.
 
 ## Evidence Scope
 
@@ -39,7 +39,6 @@ Robot task reliability, physical contact stability, collision penetration, grasp
 | Camera-to-scene configuration | `FastSAMRealtime/configs/calibration/` | Operational frame definition and installation-specific override point |
 | Asset scale provenance | `FastSAMRealtime/configs/assets/` | Target PLY and converted USDZ identity, bounds, and hashes |
 | External large files | `docs/LARGE_FILES.md` | Placement paths for weights, raw data, point clouds, and simulation assets |
-| Evidence provenance | `docs/EVIDENCE_PROVENANCE.md` | Available records, state-acceptance settings, and diagnostic-data interpretation |
 | Fig. B.1 source values | `docs/figure8_table_derived_diagnostic.csv` | Direct copy of the aggregate entries plotted from manuscript Tables 5 and 6 |
 
 ## Implementation and Reproduction Mapping
@@ -48,10 +47,11 @@ The manuscript appendix retains scientific parameters and evaluation protocols. 
 
 ### Offline asset construction
 
-- `GaussianModel/train.py` and `GaussianModel/train1.py` optimize one Gaussian scene model and its instance classifier. The Gaussian Grouping classifier head accepts at most 256 labels, including background label 0. The released configuration sets `num_classes` to 256 and uses only the background and active-object label identifiers as targets for each scene. The released main entry uses 10,000 iterations even though the inherited optimization-parameter default is 30,000.
+- `GaussianModel/train.py` optimizes one Gaussian scene model and its instance classifier. The Gaussian Grouping classifier head accepts at most 256 labels, including background label 0. The released configuration sets `num_classes` to 256 and uses only the background and active-object label identifiers as targets for each scene. The released main entry uses 10,000 iterations even though the inherited optimization-parameter default is 30,000. Numbered training snapshots are retained only for source provenance and terminate with a pointer to this entry point.
 - `GaussianModel/script/train.sh` records the scene source, image scale, output directory, and training configuration used by the command-line workflow.
 - `GaussianModel/render.py` loads the selected checkpoint and classifier state, then writes reconstructions, references, object-identifier maps, and feature visualizations for the configured split.
-- `GaussianModel/crop_gaussian_ply.py` and `third_party/3dgrut_conversion/` provide Gaussian filtering, mesh conversion, USD/USDZ conversion, and collision-proxy preparation.
+- `third_party/3dgrut_conversion/crop_gaussian_ply.py` and the adjacent conversion scripts provide Gaussian filtering, mesh conversion, USD/USDZ conversion, and collision-proxy preparation.
+- DEVA is an optional producer of cross-view masks. The canonical `GaussianModel/train.py` path consumes existing masks and does not import or execute DEVA.
 
 ### Online RGB-D observation and registration
 
@@ -65,12 +65,12 @@ The manuscript appendix retains scientific parameters and evaluation protocols. 
 
 - `FastSAMRealtime/utils/pose_utils.py` composes the accepted registration, configured camera-to-scene transform, and raw-asset normalization into `A_scene_from_asset_raw`.
 - Each observation worker identifies its tracked asset with `DGSRSIM_OBJECT_ID`, writes a compatibility single-object packet, and atomically updates the corresponding entry in the versioned `object_states.json` bundle. Every entry records the similarity transform, scale and centers, asset and calibration hashes, registration diagnostics, timestamp, and validity status. The rigid `.npy` transform remains a compatibility output.
-- `Simulation/source/leisaac/leisaac/utils/pose_sync_pipeline.py` consumes every active bundle entry and resolves object identifiers through `Simulation/configs/object_bindings.example.json`. The same configuration can spawn multiple runtime assets, so accepted updates are applied independently while rejected or absent objects retain their previous state and the background remains unchanged.
+- `Simulation/source/leisaac/leisaac/utils/pose_sync_pipeline.py` consumes active bundle entries, skips unchanged transforms, and resolves object identifiers through `Simulation/configs/object_bindings.example.json`. Inactive tombstones are forwarded to the runtime lifecycle manager. The same binding file is watched for enabled-object additions, removals, and asset-record replacements.
 - Independent pose-jump gating, SE(3) smoothing, and automatic continuous retriggering are disabled in the evaluated execution path.
 
 ### Metrics and supplementary diagnosis
 
-- `GaussianModel/metrics.py`, `GaussianModel/metrics1.py`, and the image/loss utilities implement PSNR, SSIM, and LPIPS on paired render/reference images.
+- `GaussianModel/metrics1.py` implements object-mask, object-complement background, and full-image PSNR, SSIM, and spatial LPIPS aggregation on paired render/reference images. `GaussianModel/metrics.py` is a compatibility wrapper around the same implementation.
 - `docs/figure8_table_derived_diagnostic.csv` contains the four object-count PSNR entries from manuscript Table 5 and the four stage means from manuscript Table 6. The plotted cumulative times in Fig. B.1 are 12, 48, 55, and 73 ms.
 
 ## Terminology Used Here

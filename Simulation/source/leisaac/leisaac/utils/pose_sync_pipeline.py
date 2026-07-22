@@ -104,8 +104,8 @@ def load_object_path_templates(path: str) -> Dict[str, str]:
     if payload.get("schema") != BINDINGS_SCHEMA:
         raise ValueError(f"unsupported DGSRSim object-binding schema: {payload.get('schema')!r}")
     objects = payload.get("objects")
-    if not isinstance(objects, dict) or not objects:
-        raise ValueError("object binding file must contain a non-empty 'objects' mapping")
+    if not isinstance(objects, dict):
+        raise ValueError("object binding file must contain an 'objects' mapping")
 
     bindings: Dict[str, str] = {}
     for object_id, record in objects.items():
@@ -139,6 +139,7 @@ class ObjectStateFileStream:
         self.default_object_id = str(default_object_id)
         self._lock = threading.Lock()
         self._latest_states: Dict[str, np.ndarray] = {}
+        self._latest_inactive_ids: set[str] = set()
         self._latest_mtime = -1.0
         self._latest_source = ""
         self._running = False
@@ -169,24 +170,36 @@ class ObjectStateFileStream:
         with self._lock:
             return {key: value.copy() for key, value in self._latest_states.items()}
 
-    def _read_candidate(self) -> tuple[Dict[str, np.ndarray], float, str]:
+    def get_latest_packet(self) -> tuple[Dict[str, np.ndarray], set[str]]:
+        with self._lock:
+            return (
+                {key: value.copy() for key, value in self._latest_states.items()},
+                set(self._latest_inactive_ids),
+            )
+
+    def _read_candidate(self) -> tuple[Dict[str, np.ndarray], set[str], float, str]:
         if self.state_json and os.path.exists(self.state_json):
             mtime = os.path.getmtime(self.state_json)
             payload = json.loads(Path(self.state_json).read_text(encoding="utf-8"))
             schema = payload.get("schema")
             if schema == SINGLE_STATE_SCHEMA:
                 object_id = str(payload.get("object_id") or self.default_object_id)
-                return {object_id: _state_matrix(payload)}, mtime, self.state_json
+                return {object_id: _state_matrix(payload)}, set(), mtime, self.state_json
             if schema == MULTI_STATE_SCHEMA:
                 records = payload.get("objects")
                 if not isinstance(records, dict):
                     raise ValueError("multi-object state packet requires an 'objects' mapping")
-                states = {
-                    str(object_id): _state_matrix(record)
-                    for object_id, record in records.items()
-                    if isinstance(record, dict) and bool(record.get("active", True))
-                }
-                return states, mtime, self.state_json
+                states: Dict[str, np.ndarray] = {}
+                inactive_ids: set[str] = set()
+                for object_id, record in records.items():
+                    if not isinstance(record, dict):
+                        continue
+                    normalized_id = str(object_id)
+                    if bool(record.get("active", True)):
+                        states[normalized_id] = _state_matrix(record)
+                    else:
+                        inactive_ids.add(normalized_id)
+                return states, inactive_ids, mtime, self.state_json
             raise ValueError(f"unsupported DGSRSim object-state schema: {schema!r}")
 
         # A multi-object consumer can still read the legacy sibling packet.
@@ -198,7 +211,7 @@ class ObjectStateFileStream:
                 if payload.get("schema") != SINGLE_STATE_SCHEMA:
                     raise ValueError("unsupported DGSRSim legacy object-state schema")
                 object_id = str(payload.get("object_id") or self.default_object_id)
-                return {object_id: _state_matrix(payload)}, mtime, legacy_json
+                return {object_id: _state_matrix(payload)}, set(), mtime, legacy_json
 
         if self.pose_npy and os.path.exists(self.pose_npy):
             mtime = os.path.getmtime(self.pose_npy)
@@ -206,12 +219,13 @@ class ObjectStateFileStream:
                 np.load(self.pose_npy, allow_pickle=False).astype(np.float64).reshape(4, 4),
                 "legacy_T_scene_from_target",
             )
-            return {self.default_object_id: matrix}, mtime, self.pose_npy
-        return {}, -1.0, ""
+            return {self.default_object_id: matrix}, set(), mtime, self.pose_npy
+        return {}, set(), -1.0, ""
 
     def _store_candidate(
         self,
         states: Dict[str, np.ndarray],
+        inactive_ids: set[str],
         mtime: float,
         source: str,
     ) -> bool:
@@ -222,6 +236,7 @@ class ObjectStateFileStream:
             return False
         with self._lock:
             self._latest_states = states
+            self._latest_inactive_ids = set(inactive_ids)
             self._latest_mtime = mtime
             self._latest_source = source
         return True
@@ -230,8 +245,8 @@ class ObjectStateFileStream:
         dt = 1.0 / max(self.poll_hz, 1e-6)
         while self._running:
             try:
-                states, mtime, source = self._read_candidate()
-                self._store_candidate(states, mtime, source)
+                states, inactive_ids, mtime, source = self._read_candidate()
+                self._store_candidate(states, inactive_ids, mtime, source)
             except Exception:
                 pass
             time.sleep(dt)
@@ -274,6 +289,8 @@ class PoseSyncPipeline:
 
         self._last_world_pose_by_env_object: Dict[tuple[int, str], np.ndarray] = {}
         self._unbound_object_ids: set[str] = set()
+        self._active_object_ids: set[str] = set()
+        self._lifecycle_manager = None
 
         self._object_path_templates = dict(cfg.object_path_templates)
         if not self._object_path_templates:
@@ -310,6 +327,15 @@ class PoseSyncPipeline:
         """Call on env.reset() so cache doesn't carry across episodes."""
         self._last_world_pose_by_env_object.clear()
         # Do not forcibly clear manual_override; keep it as user intent
+
+    def set_lifecycle_manager(self, manager) -> None:
+        self._lifecycle_manager = manager
+
+    def set_object_path_templates(self, bindings: Mapping[str, str]) -> None:
+        self._object_path_templates = dict(bindings)
+        self._active_object_ids.clear()
+        self._last_world_pose_by_env_object.clear()
+        self._unbound_object_ids.clear()
 
     # -------------------------
     # state transitions
@@ -353,7 +379,16 @@ class PoseSyncPipeline:
           else if freeze -> keep at last pose
         """
         if self.pose_sync_enabled:
-            states = self._stream.get_latest_all()
+            states, inactive_ids = self._stream.get_latest_packet()
+            for object_id in sorted(inactive_ids):
+                if self._lifecycle_manager is not None:
+                    try:
+                        self._lifecycle_manager.deactivate(stage, object_id)
+                    except Exception as exc:
+                        print(f"[pose-sync] failed to deactivate {object_id!r}: {exc}")
+                self._active_object_ids.discard(object_id)
+                for key in [key for key in self._last_world_pose_by_env_object if key[1] == object_id]:
+                    self._last_world_pose_by_env_object.pop(key, None)
             if not states:
                 return
 
@@ -366,6 +401,13 @@ class PoseSyncPipeline:
                             print(f"[pose-sync] no simulation binding for object_id={object_id!r}; skipping")
                             self._unbound_object_ids.add(object_id)
                         continue
+                    if object_id not in self._active_object_ids and self._lifecycle_manager is not None:
+                        try:
+                            self._lifecycle_manager.activate(stage, object_id)
+                        except Exception as exc:
+                            print(f"[pose-sync] failed to activate {object_id!r}: {exc}")
+                            continue
+                    self._active_object_ids.add(object_id)
                     object_path = path_template.format(i=i, object_id=object_id)
                     try:
                         T_world_scene = get_world_xf(stage, scene_path)
@@ -374,8 +416,14 @@ class PoseSyncPipeline:
                             A_scene_asset_raw,
                             dtype=np.float64,
                         )
+                        key = (i, object_id)
+                        previous = self._last_world_pose_by_env_object.get(key)
+                        if previous is not None and np.allclose(
+                            previous, A_world_asset_raw, rtol=0.0, atol=1e-10
+                        ):
+                            continue
                         set_prim_world_matrix(stage, object_path, A_world_asset_raw)
-                        self._last_world_pose_by_env_object[(i, object_id)] = A_world_asset_raw
+                        self._last_world_pose_by_env_object[key] = A_world_asset_raw
                     except Exception:
                         pass
             return

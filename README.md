@@ -1,6 +1,6 @@
 # DGSRSim
 
-This repository is the release copy of the code for the paper "DGSRSim: Object-Level Decoupled 3D Gaussian Assets for Robot Simulation and Online State Synchronization". It keeps the source files required to reproduce the main workflow and removes nested Git metadata, historical third-party README files, model weights, point clouds, training outputs, simulation assets, and internal collaboration files.
+This repository is the public implementation companion to the paper "DGSRSim: Object-Level Decoupled 3D Gaussian Assets for Robot Simulation and Online State Synchronization". It exposes the paper-aligned algorithms, interfaces, configuration schemas, and selected qualitative media. Model weights, raw captures, trained assets, complete evaluation records, and simulation assets are not part of the public repository during manuscript review.
 
 This release copy was reorganized from the original `code/` directory. The original source directory was not modified. `AGENTS.md` is an internal collaboration instruction file and is intentionally not included in this GitHub repository.
 
@@ -13,7 +13,7 @@ DGSRSim provides an implementation path for object-level reconstruction, online 
 - Real/virtual decoupled reconstruction: one shared Gaussian scene model is partitioned into independently addressable object subsets and a retained background subset in the same reconstruction frame.
 - Real-to-simulation synchronization: online RGB-D observations produce object-level point clouds, the recovered object state is written to the corresponding simulation asset, and the virtual scene can update only the objects whose states change.
 
-The simulation scene is asset-composable. Object assets can be added, removed, replaced, or rearranged, and robot assets such as a manipulator can be introduced into the same scene. These capabilities support object-level state tracking and interaction studies, while the repository does not claim robot task reliability, grasp success rate, contact stability, or long-horizon closed-loop control performance from the current evidence alone.
+The simulation scene is asset-composable. Locally available object assets can be added, removed, replaced, or rearranged by updating the binding configuration while the simulator is running. State records can also activate or deactivate configured objects. Robot assets such as a manipulator can be introduced into the same scene. These capabilities support object-level state tracking and interaction studies, while the repository does not claim robot task reliability, grasp success rate, contact stability, or long-horizon closed-loop control performance from the current evidence alone.
 
 For the exact paper/repository correspondence, see `docs/PAPER_ALIGNMENT.md`.
 
@@ -31,7 +31,7 @@ third_party_licenses/           License texts for retained third-party source co
 
 ## Modules
 
-`GaussianModel/` is the core module of this project. It trains one shared Gaussian scene model with instance supervision and a Gaussian Grouping classifier head. The classifier supports 2 to 256 output labels, including background label 0; the released training configuration uses 256 outputs, while each scene assigns targets only to its active object labels and the background. Object and background assets are obtained by partitioning the shared Gaussian space according to learned instance ownership; removing an object's assigned Gaussian subset leaves the retained background subset. The module supports pseudo-label preparation, training, partitioned rendering, asset extraction, and object editing. `GaussianModel/Usage` records the original step-by-step workflow used after dataset capture.
+`GaussianModel/` is the core module of this project. It trains one shared Gaussian scene model with instance supervision and a Gaussian Grouping classifier head. The classifier supports 2 to 256 output labels, including background label 0; the released training configuration uses 256 outputs, while each scene assigns targets only to its active object labels and the background. Object and background assets are obtained by partitioning the shared Gaussian space according to learned instance ownership. The module supports mask preparation, training, partitioned rendering, asset extraction, and object editing. `docs/CANONICAL_ENTRYPOINTS.md` identifies the paper-aligned entry points; numbered historical variants are retained only for provenance and are not canonical evaluation commands.
 
 `FastSAMRealtime/` handles online observation-side processing, including Kinect image acquisition, strict RGB-D alignment, FastSAM segmentation, object point-cloud cropping, filtering, and point-cloud registration. This module supports the online object-state estimation pipeline discussed in the paper. The reported stage means sum to approximately 73 ms per processed update. Their arithmetic reciprocal is about 13.7 Hz, but it is not measured loop throughput: the released script captures at 10 fps, updates the cached object cloud at up to 5 Hz, and triggers the selected-object registration on demand. The repository therefore describes online processing capability or online interaction potential rather than unconditional robot-control performance.
 
@@ -55,7 +55,7 @@ The paper evaluates reconstruction quality, pose estimation, and visual synchron
 - The minimal pick demonstration is an interface-chain record, not a robot task-reliability experiment.
 - Fig. B.1 in the manuscript is treated as a supplementary load diagnostic, not as a complete per-object, per-frame runtime scaling law.
 
-The table-derived Fig. B.1 values and the released state-acceptance configuration are recorded in `docs/EVIDENCE_PROVENANCE.md` and `docs/figure8_table_derived_diagnostic.csv`.
+The table-derived Fig. B.1 values are recorded in `docs/figure8_table_derived_diagnostic.csv`.
 
 ## Large Files and Data
 
@@ -67,17 +67,18 @@ This GitHub repository contains only source code, configuration files, license f
 - LeIsaac/IsaacLab scenes, robots, USD/USDZ, FBX, GLB, and other simulation assets;
 - large videos, high-resolution image dumps, and internal QA artifacts. Small qualitative homepage GIFs are retained under `static/results/` to show real-to-simulation synchronization and composable scene variants.
 
-See `docs/LARGE_FILES.md` for the external large-file list and the expected placement paths after download. Large assets, raw sensor captures, checkpoints, and third-party weights are provided through the supplementary/reviewer package or source-specific acquisition paths when licenses and storage constraints allow.
+See `docs/LARGE_FILES.md` for the non-public large-file inventory and the local placement conventions. During manuscript review, this public repository does not promise or expose a complete asset, checkpoint, raw-data, or evaluation archive. Authorized supplementary or reviewer material is handled separately from the public project page.
 
 ## Installation
 
 Use separate environments for different modules when possible. The Gaussian training environment, Kinect online-processing environment, and Isaac Sim/IsaacLab simulation environment have different dependency constraints.
 
 ```bash
-# GaussianModel
-pip install -r requirements/gaussian_model.txt
-pip install -e GaussianModel/submodules/diff-gaussian-rasterization
-pip install -e GaussianModel/submodules/simple-knn
+# GaussianModel reference environment
+conda env create -f requirements/pytorch24_reference.yml
+conda run -n dgsrsim-pytorch24-reference pip install -r requirements/gaussian_model.txt
+conda run -n dgsrsim-pytorch24-reference pip install -e GaussianModel/submodules/diff-gaussian-rasterization
+conda run -n dgsrsim-pytorch24-reference pip install -e GaussianModel/submodules/simple-knn
 
 # FastSAMRealtime
 pip install -r requirements/fastsam_realtime.txt
@@ -86,17 +87,22 @@ pip install -r requirements/fastsam_realtime.txt
 pip install -r requirements/conversion_simulation.txt
 ```
 
-CUDA, PyTorch, Isaac Sim/IsaacLab, Kinect SDK, and GPU driver versions should be matched to the local machine. Isaac Sim and IsaacLab are not installed through the requirements files above.
+The paper records PyTorch 2.4 and Kinect SDK 2.0. `requirements/paper_environment.md` separates those recorded facts from the current reference environment. Exact historical CUDA, driver, and auxiliary-package patch identifiers were not retained and are not reconstructed. The module requirement files therefore describe direct dependencies rather than claiming a byte-identical historical lock. Isaac Sim and IsaacLab are installed separately; the retained LeIsaac metadata targets Isaac Sim 5.1.0 and IsaacLab 2.3.0.
 
 ## Typical Workflow
 
-1. Prepare captured data, then follow the order recorded in `GaussianModel/Usage` for data conversion, pseudo-label preparation, and training.
+1. Prepare captured data and cross-view instance masks, then run conversion and training. `train.py` consumes masks from `data/<scene_name>/object_mask`; it does not import DEVA.
 
 ```bash
 cd GaussianModel
 python convert.py -s data/<scene_name>
-bash script/prepare_pseudo_label0.sh <scene_name> <gpu_id>
 bash script/train.sh <scene_name> <image_scale>
+```
+
+DEVA is an optional mask-preparation helper rather than a dependency of the training objective. When masks are not supplied by the dataset or another annotation tool, the following helper can populate `object_mask` before training:
+
+```bash
+bash script/prepare_pseudo_label0.sh <scene_name> <image_scale>
 ```
 
 2. Use `GaussianModel` to output object-level and background/object-decoupled Gaussian PLY assets in a shared world frame.
@@ -118,10 +124,19 @@ python third_party/3dgrut_conversion/gaussian_ply_to_3dgrut_mesh_ply.py \
 
 To use the original 3DGRUT export path `python -m threedgrut.export.scripts.ply_to_usd`, prepare a complete 3DGRUT runtime environment separately.
 
-5. Place the externally downloaded simulation assets under `Simulation/assets/`, declare each object ID, prim path, and optional spawn record in `Simulation/configs/object_bindings.example.json`, then run `Simulation/scripts/environments/teleoperation/teleop_se3_agent.py`. It reads `FastSAMRealtime/rt_ply_out/object_states.json` by default, applies all active object entries, and uses `T_tgt_to_scene.npy` only as a legacy fallback. Run one observation worker per tracked object with a distinct `DGSRSIM_OBJECT_ID`; the workers update the shared bundle atomically. Object addition, removal, and replacement are handled through the binding and spawn records without changing the synchronization loop.
+5. Place locally authorized simulation assets under `Simulation/assets/`, declare each object ID, prim path, and optional spawn record in `Simulation/configs/object_bindings.example.json`, then run `Simulation/scripts/environments/teleoperation/teleop_se3_agent.py`. It reads `FastSAMRealtime/rt_ply_out/object_states.json` by default and uses `T_tgt_to_scene.npy` only as a legacy fallback. The binding file is watched at runtime: enabling or adding a complete spawn record adds an object, disabling or deleting a record removes it, and changing its asset record replaces it. `FastSAMRealtime/object_state_control.py` activates or deactivates retained state records. Only changed transforms are written to USD.
+
+6. Evaluate rendered appearance with an explicit region. Binary masks may use any nonzero value; `--mask_label` selects one grayscale instance identifier from a label map. Object and background commands use the same masks, with the latter evaluating their complement:
+
+```bash
+python metrics1.py -r <renders> -g <references> --mask_dir <masks> --region object --output_json object_metrics.json
+python metrics1.py -r <renders> -g <references> --mask_dir <masks> --region background --output_json background_metrics.json
+```
+
+PSNR is normalized by selected pixels, SSIM is averaged over the selected SSIM-map locations, and spatial LPIPS is aggregated only over the selected region. `metrics.py` forwards to the same implementation for compatibility.
 
 ## Third-Party Code
 
-This repository contains reorganized third-party research code and selected local adaptations. The original project README files are not kept as top-level documentation in this release copy. Citations, licenses, and source notes are consolidated in `THIRD_PARTY_NOTICES.md` and `third_party_licenses/`.
+This repository contains reorganized third-party research code and selected local adaptations. The original project README files are not kept as top-level documentation in this release copy. The root `LICENSE` applies only to DGSRSim-specific material that carries no different notice. Third-party citations, licenses, exceptions, and source notes are consolidated in `NOTICE.md`, `THIRD_PARTY_NOTICES.md`, and `third_party_licenses/`.
 
-Important license note: `FastSAMRealtime/` retains FastSAM and related Ultralytics code. The original FastSAM project is licensed under AGPL-3.0. Before final public distribution, confirm that the root project license is compatible with AGPL-3.0 and follow all third-party license requirements.
+`GaussianModel/submodules/diff-gaussian-rasterization/` retains a non-commercial research license. The root AGPL-3.0 license does not override that restriction or any other third-party term.

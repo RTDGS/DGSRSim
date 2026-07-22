@@ -1,5 +1,8 @@
 #!/bin/bash
 
+echo "Legacy training snapshot disabled. Use script/train.sh." >&2
+exit 2
+
 # Check if the user provided an argument
 if [ "$#" -ne 2 ]; then
     echo "Usage: $0 <dataset_name>"

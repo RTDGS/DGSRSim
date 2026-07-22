@@ -1,3 +1,5 @@
+raise SystemExit("Legacy orchestration snapshot disabled. Follow README.md canonical steps.")
+
 import json
 import os
 import sys

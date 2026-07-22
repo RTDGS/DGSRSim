@@ -9,7 +9,7 @@ set -euo pipefail
 #
 # Usage:
 #   bash tools/run_3dgrut_usdz_collision_pipeline.sh \
-#     /media/ubuntu/L/output/hu/point_cloud_object_removal/iteration_10000/point_cloud.ply
+#     path/to/point_cloud.ply
 #
 # Optional second argument:
 #   output directory. Defaults to the input PLY directory.
@@ -32,7 +32,12 @@ export CUDAHOSTCXX=/usr/bin/g++-12
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 
-INPUT_PLY="${1:-/media/ubuntu/L/output/hu/point_cloud_object_removal/iteration_10000/point_cloud.ply}"
+if [[ "$#" -lt 1 ]]; then
+  echo "Usage: $0 <input_ply> [output_directory]" >&2
+  exit 2
+fi
+
+INPUT_PLY="$1"
 OUT_DIR="${2:-$(dirname "${INPUT_PLY}")}"
 
 FILTERED_PLY="${OUT_DIR}/point_cloud_filtered.ply"

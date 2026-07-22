@@ -1,3 +1,5 @@
+raise SystemExit("Legacy training snapshot disabled. Use GaussianModel/train.py.")
+
 # -----------------------------------------------------------------------------------
 # FINAL MULTI-GPU VERSION (GPU0: render, GPU1: classifier)
 # Fully working version without .to() on GaussianModel

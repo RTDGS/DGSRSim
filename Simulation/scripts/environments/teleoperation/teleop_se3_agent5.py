@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+raise SystemExit("Legacy simulation snapshot disabled. Use teleop_se3_agent.py.")
+
 """
 Rule-based grasping (no keyboard/mouse teleop) for LeIsaac/IsaacLab teleop script.
 

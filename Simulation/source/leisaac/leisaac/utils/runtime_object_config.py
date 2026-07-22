@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Mapping, Tuple
+from typing import Dict, Mapping, Optional, Tuple
 
 
 BINDINGS_SCHEMA = "dgsrsim.simulation_object_bindings.v1"
@@ -53,8 +53,8 @@ def load_runtime_object_configs(
     if payload.get("schema") != BINDINGS_SCHEMA:
         raise ValueError(f"unsupported DGSRSim object-binding schema: {payload.get('schema')!r}")
     objects = payload.get("objects")
-    if not isinstance(objects, Mapping) or not objects:
-        raise ValueError("object binding file must contain a non-empty 'objects' mapping")
+    if not isinstance(objects, Mapping):
+        raise ValueError("object binding file must contain an 'objects' mapping")
 
     assets_root = Path(assets_root)
     project_root = Path(project_root)
@@ -113,3 +113,32 @@ def load_runtime_object_configs(
             proxy_visible=bool(spawn.get("proxy_visible", True)),
         )
     return result
+
+
+class RuntimeObjectConfigWatcher:
+    """Reload enabled object declarations when the binding file changes."""
+
+    def __init__(
+        self,
+        path: str,
+        *,
+        assets_root: str | Path,
+        project_root: str | Path,
+    ):
+        self.path = Path(path)
+        self.assets_root = Path(assets_root)
+        self.project_root = Path(project_root)
+        self._signature: tuple[int, int] | None = None
+
+    def poll(self, *, force: bool = False) -> Optional[Dict[str, RuntimeObjectConfig]]:
+        stat = self.path.stat()
+        signature = (stat.st_mtime_ns, stat.st_size)
+        if not force and signature == self._signature:
+            return None
+        configs = load_runtime_object_configs(
+            str(self.path),
+            assets_root=self.assets_root,
+            project_root=self.project_root,
+        )
+        self._signature = signature
+        return configs

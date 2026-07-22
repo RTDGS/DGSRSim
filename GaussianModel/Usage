@@ -1,119 +1,25 @@
-python convert.py -s data/001
+# DGSRSim GaussianModel workflow
 
-export PYTHONPATH=$PYTHONPATH:$(pwd)#deva
+# 1. Convert one captured multi-view scene.
+python convert.py -s data/<scene_name>
 
-bash script/prepare_pseudo_label0.sh 001 1
+# 2. Place cross-view instance masks in data/<scene_name>/object_mask.
+# The masks may come from dataset annotations or another annotation tool.
+# DEVA is optional and is used only to prepare masks:
+bash script/prepare_pseudo_label0.sh <scene_name> <image_scale>
 
+# 3. Train the shared Gaussian field and classifier with the released config.
+bash script/train.sh <scene_name> <image_scale>
 
-bash script/train.sh 001 1
+# 4. Render the configured evaluation split.
+python render.py -m output/<scene_name> --config_file config/gaussian_dataset/train0.json
 
-# Gray.py修改读取路径，找到对应的灰度id
+# 5. Evaluate explicit object and background regions.
+python metrics1.py -r <renders> -g <references> --mask_dir <binary_or_label_masks> --region object
+python metrics1.py -r <renders> -g <references> --mask_dir <binary_or_label_masks> --region background
 
-#object_removal
-bash script/edit_object_removal.sh output/baowenbei config/object_removal/astronaut.json --skip_test
-#以上为删除，如需反选，需要修改gaussian model的218行，～
+# 6. Filter an exported Gaussian PLY before USD/USDZ conversion.
+python ../third_party/3dgrut_conversion/crop_gaussian_ply.py <input.ply> --output <filtered.ply>
 
-
-#object_inpaint
-#step1
-cd Tracking-Anything-with-DEVA/
-
-img_path=../output/room/train/ours_30000/renders	
-mask_path=./output_2d_inpaint_mask/room #需要手动创建改文件夹 
-lama_path=../lama/LaMa_test_images/room #同上
-lame_input=./output_2d_inpaint_mask/room
-
-cd ~/Desktop/gaussian-grouping01/Tracking-Anything-with-DEVA
-
-
-
-
-
-export PYTHONPATH=$(pwd):$(pwd)/Tracking-Anything-with-DEVA:$(pwd)/Tracking-Anything-with-DEVA/Grounded-Segment-Anything:$(pwd)/Tracking-Anything-with-DEVA/Grounded-Segment-Anything/GroundingDINO:$PYTHONPATH#GroundingDINO
-
-
-python demo/demo_with_text.py   --chunk_size 4    --img_path $img_path  --amp \
-  --temporal_setting semionline --size 480   --output $mask_path  \
-  --prompt "slippers on the carpet"
-  
-# white astronaut toy holding a tray
-
-
-python prepare_lama_input.py $img_path $lame_input $lama_path	
-cd ..
-
-
-
-#step2
-
-cd lama
-export TORCH_HOME=$(pwd) && export PYTHONPATH=$(pwd)
-
-dataset=room
-img_dir=../data/$dataset
-
-python bin/predict.py refine=True model.path=$(pwd)/big-lama indir=$(pwd)/LaMa_test_images/$dataset outdir=$(pwd)/output/$dataset
-python prepare_pseudo_label.py $(pwd)/output/$dataset $img_dir
-
-cd ..
-#将文件换成黑白图，使用changeGray.py，修改input_folder和target_gray
-
-#step3
-#执行前需要修改select_obj_id
-bash script/edit_object_inpaint.sh output/ball-com config/object_inpaint/bear.json  
-#step4
-python metrics1.py -r output/scene/train/ours_30000/renders -g output/scene/train/ours_30000/gt
-  Theirs:
-  SSIM :    0.9362300
-  PSNR :   27.8389511
-  LPIPS:    0.0514668
-  Ours:
-  SSIM :    0.9424825
-  PSNR :   31.2394981
-  LPIPS:    0.0491433
-#使用render
-  python render.py -m output/Astronaut1
-  
-  
-ball:
-  ours
-   SSIM :    0.9889100
-   PSNR :   32.2599449
-   LPIPS:    0.0125568
-  theirs
-   SSIM :    0.8740065
-   PSNR :   31.3590355
-   LPIPS:    0.0683632
-  python lama_input.py \
-  --deva_dir ./output_2d_inpaint_mask/Astronaut/Annotations\
-  --obj_dir  ../data/Astronaut/inpaint_object_mask_255
-  --out_dir  ./output_2d_inpaint_mask/Astronaut/refined \
-  --dilate_ks 41 \
-  --keep_lcc
-  ###解压Scannet
-  python ScanNet.py --filename /media/ubuntu/L/1occ/datas/scans/scene0038_00/scene0038_00.sens --output_path /media/ubuntu/L/ScanNet0038 --export_color_images
-
-Options:
---export_depth_images: export all depth frames as 16-bit pngs (depth shift 1000)
---export_color_images: export all color frames as 8-bit rgb jpgs
---export_poses: export all camera poses (4x4 matrix, camera to world)
---export_intrinsics: export camera intrinsics (4x4 matrix)
-  
-Astronaut
- ours:  
-  SSIM :    0.9464027
-  PSNR :   27.4378338
-  LPIPS:    0.3922491
- theris:
-  SSIM :    0.9516012
-  PSNR :   28.2421589
-  LPIPS:    0.3750290
-
-scannet0033
-Results:
-  SSIM :    0.9189047
-  PSNR :   25.0616112
-  LPIPS:    0.3240832
-
-
-
+# Canonical public entry points are listed in docs/CANONICAL_ENTRYPOINTS.md.
+# Numbered historical variants are retained for provenance, not as defaults.

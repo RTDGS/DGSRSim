@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+raise SystemExit("Legacy RGB-D snapshot disabled. Use rt_seg_strict_align_cut_object_pcd5.py.")
+
 """
 Fix goals (no change to your high-level logic):
 1) 保证 masks 的分辨率与 color 完全一致（FastSAM/resize/letterbox 造成的 mismatch 会被强制修正）

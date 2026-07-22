@@ -1,4 +1,8 @@
-### **Standard Installation**
+# Legacy upstream installation note
+
+This page preserves the installation recipe inherited from Gaussian Grouping. It is not the canonical DGSRSim paper environment and its PyTorch 1.12 stack should not be used to interpret the reported experiments. Use [`../../requirements/README.md`](../../requirements/README.md) and [`../../requirements/paper_environment.md`](../../requirements/paper_environment.md) for the DGSRSim environment record. DEVA below is optional mask preparation tooling; `train.py` consumes prepared masks and does not invoke DEVA.
+
+### Upstream installation
 
 
 Clone the repository locally

@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+raise SystemExit("Legacy simulation snapshot disabled. Use teleop_se3_agent.py.")
+
 import multiprocessing
 
 if multiprocessing.get_start_method() != "spawn":

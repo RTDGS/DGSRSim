@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+raise SystemExit("Legacy RGB-D snapshot disabled. Use rt_seg_strict_align_cut_object_pcd5.py.")
+
 import os
 import time
 import threading

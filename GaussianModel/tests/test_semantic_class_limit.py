@@ -1,5 +1,13 @@
 import unittest
 
+import sys
+from pathlib import Path
+
+
+GAUSSIAN_ROOT = Path(__file__).resolve().parents[1]
+if str(GAUSSIAN_ROOT) not in sys.path:
+    sys.path.insert(0, str(GAUSSIAN_ROOT))
+
 from arguments import (
     DEFAULT_SEMANTIC_CLASSES,
     MAX_SEMANTIC_CLASSES,

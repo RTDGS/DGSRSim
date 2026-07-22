@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+raise SystemExit("Legacy simulation snapshot disabled. Use teleop_se3_agent.py.")
+
 # Copyright (c) 2022-2025, The Isaac Lab Project Developers.
 # All rights reserved.
 #

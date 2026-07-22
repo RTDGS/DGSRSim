@@ -1,9 +1,12 @@
 #!/bin/bash
 
+# Optional DEVA-based mask preparation. The paper-aligned train.py only reads
+# the resulting data/<scene>/object_mask directory and does not import DEVA.
+
 
 # Check if the user provided an argument
 if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <dataset_name>"
+    echo "Usage: $0 <dataset_name> <image_scale>"
     exit 1
 fi
 

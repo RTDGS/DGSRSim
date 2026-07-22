@@ -163,10 +163,10 @@ from leisaac.utils.teleop_env_factory import create_env_and_cfg
 
 # Runtime-object factory
 from leisaac.utils.runtime_mug_factory import (
+    RuntimeObjectManager,
     RuntimeObjectSpec,
-    spawn_runtime_objects_for_all_envs,
 )
-from leisaac.utils.runtime_object_config import load_runtime_object_configs
+from leisaac.utils.runtime_object_config import RuntimeObjectConfigWatcher
 
 # Recording utils
 from leisaac.utils.recording_utils import (
@@ -213,6 +213,36 @@ def make_zero_actions(env):
     if space is not None and hasattr(space, "shape") and space.shape is not None:
         return torch.zeros((env.num_envs,) + tuple(space.shape), device=env.device)
     raise RuntimeError("Cannot infer action dimension.")
+
+
+def make_runtime_specs(configured_objects):
+    """Convert validated binding records into scale-preserving spawn specs."""
+    specs = {}
+    for object_id, object_cfg in configured_objects.items():
+        asset_profile = json.loads(object_cfg.asset_profile_path.read_text(encoding="utf-8"))
+        raw_extent = tuple(float(value) for value in asset_profile["source_ply"]["aabb_extent"])
+        specs[object_id] = RuntimeObjectSpec(
+            proxy_name=object_cfg.proxy_name,
+            visual_child_name="visual",
+            proxy_pos=object_cfg.initial_position_m,
+            proxy_quat_wxyz=object_cfg.initial_quaternion_wxyz,
+            target_visual_size_m=object_cfg.target_visual_size_m,
+            proxy_size_asset_units=raw_extent,
+            density=object_cfg.density_kg_m3,
+            proxy_visible=object_cfg.proxy_visible,
+            usdz_path=str(object_cfg.usdz_path),
+            visual_base_scale=1.0,
+            auto_fit_axis="z",
+            extra_visual_scale=1.0,
+            consume_state_similarity=True,
+            kinematic=True,
+            disable_gravity=True,
+            visual_local_pos=(0.0, 0.0, 0.0),
+            visual_local_quat_wxyz=(1.0, 0.0, 0.0, 0.0),
+            geom_local_pos=(0.0, 0.0, 0.0),
+            geom_local_quat_wxyz=(1.0, 0.0, 0.0, 0.0),
+        )
+    return specs
 
 
 # ============================================================
@@ -316,6 +346,8 @@ def main():  # noqa: C901
         num_envs=env.num_envs,
         rule_grasp_mode=(args_cli.teleop_device == "rule-grasp"),
     )
+    if args_cli.object_bindings_json:
+        pose_sync.set_object_path_templates(object_path_templates)
 
     if FORCE_DISABLE_POSE_SYNC:
         print("[pose-sync] FORCE_DISABLE_POSE_SYNC=True -> Pose sync will NOT run (no step/apply/reset).")
@@ -362,44 +394,17 @@ def main():  # noqa: C901
     # Spawn every runtime object declared by the ID-to-prim binding map.
     # -----------------------------
     project_root = Path(__file__).resolve().parents[4]
-    configured_objects = (
-        load_runtime_object_configs(
+    config_watcher = (
+        RuntimeObjectConfigWatcher(
             args_cli.object_bindings_json,
             assets_root=ASSETS_ROOT,
             project_root=project_root,
         )
         if args_cli.object_bindings_json
-        else {}
+        else None
     )
-    runtime_specs = {}
-    for object_id, object_cfg in configured_objects.items():
-        asset_profile = json.loads(
-            object_cfg.asset_profile_path.read_text(encoding="utf-8")
-        )
-        raw_extent = tuple(
-            float(value) for value in asset_profile["source_ply"]["aabb_extent"]
-        )
-        runtime_specs[object_id] = RuntimeObjectSpec(
-            proxy_name=object_cfg.proxy_name,
-            visual_child_name="visual",
-            proxy_pos=object_cfg.initial_position_m,
-            proxy_quat_wxyz=object_cfg.initial_quaternion_wxyz,
-            target_visual_size_m=object_cfg.target_visual_size_m,
-            proxy_size_asset_units=raw_extent,
-            density=object_cfg.density_kg_m3,
-            proxy_visible=object_cfg.proxy_visible,
-            usdz_path=str(object_cfg.usdz_path),
-            visual_base_scale=1.0,
-            auto_fit_axis="z",
-            extra_visual_scale=1.0,
-            consume_state_similarity=True,
-            kinematic=True,
-            disable_gravity=True,
-            visual_local_pos=(0.0, 0.0, 0.0),
-            visual_local_quat_wxyz=(1.0, 0.0, 0.0, 0.0),
-            geom_local_pos=(0.0, 0.0, 0.0),
-            geom_local_quat_wxyz=(1.0, 0.0, 0.0, 0.0),
-        )
+    configured_objects = config_watcher.poll(force=True) if config_watcher else {}
+    runtime_specs = make_runtime_specs(configured_objects)
 
     if not args_cli.object_bindings_json:
         asset_profile = json.loads(
@@ -423,15 +428,15 @@ def main():  # noqa: C901
             disable_gravity=True,
         )
 
-    if runtime_specs:
-        spawn_runtime_objects_for_all_envs(
-            stage=stage,
-            num_envs=env.num_envs,
-            env_root_tpl="/World/envs/env_{i}",
-            specs=runtime_specs,
-            verbose=True,
-        )
-    else:
+    runtime_manager = RuntimeObjectManager(
+        stage=stage,
+        num_envs=env.num_envs,
+        env_root_tpl="/World/envs/env_{i}",
+        object_path_templates=object_path_templates,
+    )
+    runtime_manager.reconcile(runtime_specs)
+    pose_sync.set_lifecycle_manager(runtime_manager)
+    if not runtime_specs:
         print("[runtime-object] no enabled spawn records; bound prims must already exist in the task scene")
 
     # -----------------------------
@@ -490,6 +495,15 @@ def main():  # noqa: C901
 
                 if actions is None:
                     actions = make_zero_actions(env)
+
+                if config_watcher is not None:
+                    updated_objects = config_watcher.poll()
+                    if updated_objects is not None:
+                        updated_bindings = load_object_path_templates(args_cli.object_bindings_json)
+                        runtime_manager.reconcile(make_runtime_specs(updated_objects))
+                        runtime_manager.set_object_path_templates(updated_bindings)
+                        pose_sync.set_object_path_templates(updated_bindings)
+                        print("[runtime-object] binding configuration reloaded")
 
                 # Apply every active object state to its configured prim.
                 if not FORCE_DISABLE_POSE_SYNC:

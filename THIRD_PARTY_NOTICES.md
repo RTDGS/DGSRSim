@@ -2,6 +2,8 @@
 
 本发布版仓库以 DGSRSim 论文代码为主，将原始子项目 README 合并到主 README 的模块说明中。第三方来源、许可证和引用在本文件集中列出。
 
+根目录 `LICENSE` 中的 AGPL-3.0 仅覆盖未附带其他许可证声明的 DGSRSim 自有代码与文档，不覆盖或替代下列第三方条款。`NOTICE.md` 给出整个混合许可仓库的适用范围。特别是 `GaussianModel/submodules/diff-gaussian-rasterization/` 继续受其目录内 Inria/MPII 非商业研究许可证约束。
+
 ## 3DGRUT / 3D Gaussian Ray Tracing
 
 保留位置：`third_party/3dgrut_conversion/`
@@ -76,4 +78,3 @@
 | LaMA | `third_party_licenses/LaMA-Apache-2.0.txt` | 对象移除/补全中的 inpainting |
 | Segment Anything | `third_party_licenses/Segment-Anything-LICENSE.txt` | 掩码生成与交互式分割辅助 |
 | LeIsaac | `third_party_licenses/LeIsaac-Apache-2.0.txt` | IsaacLab 仿真任务、资产导入与对象状态同步 |
-

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Sequence, Tuple, Optional
+from typing import Callable, Literal, Mapping, Sequence, Tuple, Optional
 
 import numpy as np
 
@@ -64,7 +64,7 @@ class RuntimeMugSpec:
     kinematic: bool = True
     disable_gravity: bool = True
 
-    # NEW: 手动把 visual / geom 都搬到“父节点中心”
+    # Optional local offsets for the visual and collision geometry.
     visual_local_pos: Tuple[float, float, float] = (0.0, 0.0, 0.0)
     visual_local_quat_wxyz: Tuple[float, float, float, float] = (1.0, 0.0, 0.0, 0.0)
 
@@ -98,7 +98,7 @@ def spawn_runtime_mug_for_env(stage, env_root: str, spec: RuntimeMugSpec) -> dic
     proxy_path = f"{env_root}/{spec.proxy_name}"
     usdz_abs = str(Path(spec.usdz_path))
 
-    # 1) proxy rigid box（geom 子节点也做手动 TR）
+    # 1) Create the rigid proxy and its collision geometry.
     proxy_size = (
         tuple(spec.proxy_size_asset_units)
         if spec.consume_state_similarity and spec.proxy_size_asset_units is not None
@@ -134,7 +134,7 @@ def spawn_runtime_mug_for_env(stage, env_root: str, spec: RuntimeMugSpec) -> dic
         s_fit = _compute_fit_scale(cur, spec.target_visual_size_m, spec.auto_fit_axis)
     s_final = float(s_fit) * float(spec.extra_visual_scale)
 
-    # 4.1) 一次性写入 visual 的 local TRS（关键：避免覆盖）
+    # 4.1) Write the visual's local transform once after scale selection.
     vis_prim = stage.GetPrimAtPath(visual_path)
     set_xform_trs(
         vis_prim,
@@ -215,5 +215,117 @@ def spawn_runtime_objects_for_all_envs(
             paths = [entry["proxy_path"] for entry in spawned[object_id]]
             print(f"[runtime-object] object_id={object_id!r} proxies={paths}")
     return spawned
+
+
+class RuntimeObjectManager:
+    """Reconcile configured assets with the live USD stage.
+
+    Adding a specification spawns the object, removing it unspawns the object,
+    and changing a specification replaces its prims. State-bundle activation
+    and deactivation reuse the same methods without changing the config file.
+    """
+
+    def __init__(
+        self,
+        stage,
+        num_envs: int,
+        env_root_tpl: str = "/World/envs/env_{i}",
+        *,
+        object_path_templates: Optional[Mapping[str, str]] = None,
+        spawn_all: Callable = spawn_runtime_mugs_for_all_envs,
+    ):
+        self.stage = stage
+        self.num_envs = int(num_envs)
+        self.env_root_tpl = str(env_root_tpl)
+        self._spawn_all = spawn_all
+        self._specs: dict[str, RuntimeObjectSpec] = {}
+        self._object_path_templates = dict(object_path_templates or {})
+        self._active: set[str] = set()
+
+    @property
+    def active_object_ids(self) -> frozenset[str]:
+        return frozenset(self._active)
+
+    def set_object_path_templates(self, bindings: Mapping[str, str]) -> None:
+        updated = dict(bindings)
+        changed = {
+            object_id
+            for object_id in set(self._object_path_templates) | set(updated)
+            if self._object_path_templates.get(object_id) != updated.get(object_id)
+        }
+        self._object_path_templates = updated
+        self._active.difference_update(changed)
+
+    def _proxy_path(self, object_id: str, env_index: int) -> str:
+        spec = self._specs.get(object_id)
+        if spec is not None:
+            return f"{self.env_root_tpl.format(i=env_index).rstrip('/')}/{spec.proxy_name}"
+        template = self._object_path_templates.get(object_id)
+        if not template:
+            raise KeyError(f"no simulation binding for object {object_id!r}")
+        return template.format(i=env_index, object_id=object_id)
+
+    def _bound_prims(self, stage, object_id: str):
+        paths = [self._proxy_path(object_id, index) for index in range(self.num_envs)]
+        return [(path, stage.GetPrimAtPath(path)) for path in paths]
+
+    @staticmethod
+    def _is_valid_prim(prim) -> bool:
+        return bool(prim and prim.IsValid())
+
+    def _remove(self, stage, object_id: str) -> None:
+        for path, prim in self._bound_prims(stage, object_id):
+            if self._is_valid_prim(prim):
+                stage.RemovePrim(path)
+        self._active.discard(object_id)
+
+    def activate(self, stage, object_id: str) -> None:
+        if object_id in self._active:
+            return
+        spec = self._specs.get(object_id)
+        bound_prims = self._bound_prims(stage, object_id)
+        valid = [self._is_valid_prim(prim) for _, prim in bound_prims]
+        if all(valid):
+            for _, prim in bound_prims:
+                prim.SetActive(True)
+        elif any(valid):
+            raise RuntimeError(f"object {object_id!r} is present in only part of the environments")
+        elif spec is not None:
+            self._spawn_all(
+                stage=stage,
+                num_envs=self.num_envs,
+                env_root_tpl=self.env_root_tpl,
+                spec=spec,
+                verbose=False,
+            )
+        else:
+            raise KeyError(
+                f"object {object_id!r} has a binding but no existing prim or enabled spawn specification"
+            )
+        self._active.add(object_id)
+        print(f"[runtime-object] activated object_id={object_id!r}")
+
+    def deactivate(self, stage, object_id: str) -> None:
+        for _, prim in self._bound_prims(stage, object_id):
+            if self._is_valid_prim(prim):
+                prim.SetActive(False)
+        self._active.discard(object_id)
+        print(f"[runtime-object] deactivated object_id={object_id!r}")
+
+    def reconcile(self, specs: dict[str, RuntimeObjectSpec]) -> None:
+        """Apply add, remove, and replacement changes from a config snapshot."""
+        old_ids = set(self._specs)
+        new_ids = set(specs)
+        changed = {
+            object_id
+            for object_id in old_ids & new_ids
+            if self._specs.get(object_id) != specs[object_id]
+        }
+        removed = old_ids - new_ids
+        for object_id in sorted(removed | changed):
+            self._remove(self.stage, object_id)
+        self._specs = dict(specs)
+        for object_id in sorted((new_ids - old_ids) | changed):
+            self.activate(self.stage, object_id)
 
 

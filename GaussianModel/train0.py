@@ -1,3 +1,5 @@
+raise SystemExit("Legacy training snapshot disabled. Use GaussianModel/train.py.")
+
 # Copyright (C) 2023, Gaussian-Grouping
 # Gaussian-Grouping research group, https://github.com/lkeab/gaussian-grouping
 # All rights reserved.
