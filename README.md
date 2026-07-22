@@ -54,9 +54,8 @@ The paper evaluates reconstruction quality, pose estimation, and visual synchron
 - PSNR, SSIM, and LPIPS measure rendering or visual-consistency quality; they are not physical interaction metrics.
 - The minimal pick demonstration is an interface-chain record, not a robot task-reliability experiment.
 - Fig. B.1 in the manuscript is treated as a supplementary load diagnostic, not as a complete per-object, per-frame runtime scaling law.
-- The public repository does not contain the itemized offline-evaluation manifest or per-frame outputs needed to recompute the aggregate values in Tables 2-6.
 
-The exact provenance boundary and the table-derived Fig. B.1 values are recorded in `docs/EVIDENCE_PROVENANCE.md` and `docs/figure8_table_derived_diagnostic.csv`.
+The table-derived Fig. B.1 values and the released state-acceptance configuration are recorded in `docs/EVIDENCE_PROVENANCE.md` and `docs/figure8_table_derived_diagnostic.csv`.
 
 ## Large Files and Data
 
