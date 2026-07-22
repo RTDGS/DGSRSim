@@ -21,7 +21,12 @@ from gaussian_renderer import render, network_gui
 from scene import Scene, GaussianModel
 from utils.general_utils import safe_state
 from utils.image_utils import psnr
-from arguments import ModelParams, PipelineParams, OptimizationParams
+from arguments import (
+    DEFAULT_SEMANTIC_CLASSES,
+    ModelParams,
+    OptimizationParams,
+    PipelineParams,
+)
 
 import wandb
 
@@ -152,6 +157,7 @@ def training(
     dgsrsim_reg_max_points = int(getattr(opt, "dgsrsim_reg_max_points", 2048))
 
     viewpoint_stack = None
+    validated_semantic_views = set()
     ema_loss_for_log = 0.0
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
@@ -212,6 +218,16 @@ def training(
 
         # Normalized semantic cross-entropy for shared-field ownership.
         gt_obj = viewpoint_cam.objects.cuda().long()
+        view_key = id(viewpoint_cam)
+        if view_key not in validated_semantic_views:
+            label_min = int(gt_obj.min().item())
+            label_max = int(gt_obj.max().item())
+            if label_min < 0 or label_max >= num_classes:
+                raise ValueError(
+                    "Semantic labels must be in [0, num_classes - 1]; "
+                    f"observed [{label_min}, {label_max}] with num_classes={num_classes}"
+                )
+            validated_semantic_views.add(view_key)
         logits = classifier(objects)
         loss_sem = cls_criterion(logits.unsqueeze(0), gt_obj.unsqueeze(0)).squeeze().mean()
         loss_sem = loss_sem / torch.log(
@@ -500,7 +516,7 @@ if __name__ == "__main__":
         exit(1)
 
     args.densify_until_iter = config.get("densify_until_iter", 15000)
-    args.num_classes = config.get("num_classes", 200)
+    args.num_classes = config.get("num_classes", DEFAULT_SEMANTIC_CLASSES)
     args.reg3d_interval = config.get("reg3d_interval", 2)
     args.dgsrsim_lambda_alpha = config.get("dgsrsim_lambda_alpha", config.get("lambda_alpha", 0.10))
     args.dgsrsim_lambda_bg_reg = config.get("dgsrsim_lambda_bg_reg", config.get("lambda_bg_reg", 0.50))

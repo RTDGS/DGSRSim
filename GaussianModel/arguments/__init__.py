@@ -10,6 +10,29 @@ from argparse import ArgumentParser, Namespace
 import sys
 import os
 
+
+MIN_SEMANTIC_CLASSES = 2
+MAX_SEMANTIC_CLASSES = 256
+DEFAULT_SEMANTIC_CLASSES = MAX_SEMANTIC_CLASSES
+
+
+def validate_semantic_class_count(value):
+    """Return a valid classifier width for background plus instance labels."""
+    if isinstance(value, bool):
+        raise ValueError("num_classes must be an integer between 2 and 256")
+    if isinstance(value, float) and not value.is_integer():
+        raise ValueError("num_classes must be an integer between 2 and 256")
+    try:
+        count = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("num_classes must be an integer between 2 and 256") from exc
+    if count < MIN_SEMANTIC_CLASSES or count > MAX_SEMANTIC_CLASSES:
+        raise ValueError(
+            f"num_classes must be in [{MIN_SEMANTIC_CLASSES}, {MAX_SEMANTIC_CLASSES}], got {count}"
+        )
+    return count
+
+
 class GroupParams:
     pass
 
@@ -55,12 +78,13 @@ class ModelParams(ParamGroup):
         self.random_init = False
         self.train_split = False
         self._object_path = "object_mask"
-        self.num_classes = 200
+        self.num_classes = DEFAULT_SEMANTIC_CLASSES
         super().__init__(parser, "Loading Parameters", sentinel)
 
     def extract(self, args):
         g = super().extract(args)
         g.source_path = os.path.abspath(g.source_path)
+        g.num_classes = validate_semantic_class_count(g.num_classes)
         return g
 
 class PipelineParams(ParamGroup):

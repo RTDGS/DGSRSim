@@ -48,7 +48,7 @@ The manuscript appendix retains scientific parameters and evaluation protocols. 
 
 ### Offline asset construction
 
-- `GaussianModel/train.py` and `GaussianModel/train1.py` optimize one Gaussian scene model and its instance classifier. The released main entry uses 10,000 iterations even though the inherited optimization-parameter default is 30,000.
+- `GaussianModel/train.py` and `GaussianModel/train1.py` optimize one Gaussian scene model and its instance classifier. The Gaussian Grouping classifier head accepts at most 256 labels, including background label 0. The released configuration sets `num_classes` to 256 and uses only the background and active-object label identifiers as targets for each scene. The released main entry uses 10,000 iterations even though the inherited optimization-parameter default is 30,000.
 - `GaussianModel/script/train.sh` records the scene source, image scale, output directory, and training configuration used by the command-line workflow.
 - `GaussianModel/render.py` loads the selected checkpoint and classifier state, then writes reconstructions, references, object-identifier maps, and feature visualizations for the configured split.
 - `GaussianModel/crop_gaussian_ply.py` and `third_party/3dgrut_conversion/` provide Gaussian filtering, mesh conversion, USD/USDZ conversion, and collision-proxy preparation.
