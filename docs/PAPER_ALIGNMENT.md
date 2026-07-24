@@ -2,7 +2,7 @@
 
 This repository follows the manuscript wording of:
 
-`DGSRSim: Object-Level Decoupled 3D Gaussian Assets for Robot Simulation and Online State Synchronization`
+`DGSRSim: An Object-Level Decoupled 3D Gaussian Scene Representation for Robot Simulation and Online State Synchronization`
 
 Project homepage: https://rtdgs.github.io/DGSRSim/
 

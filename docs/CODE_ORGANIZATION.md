@@ -2,7 +2,7 @@
 
 整理日期：2026-06-02；论文口径同步更新：2026-07-09
 
-对应论文题名：`DGSRSim: Object-Level Decoupled 3D Gaussian Assets for Robot Simulation and Online State Synchronization`
+对应论文题名：`DGSRSim: An Object-Level Decoupled 3D Gaussian Scene Representation for Robot Simulation and Online State Synchronization`
 
 输入目录：`code/`
 

@@ -1,6 +1,6 @@
 # DGSRSim
 
-This repository is the public implementation companion to the paper "DGSRSim: Object-Level Decoupled 3D Gaussian Assets for Robot Simulation and Online State Synchronization". It exposes the paper-aligned algorithms, interfaces, configuration schemas, and selected qualitative media. Model weights, raw captures, trained assets, complete evaluation records, and simulation assets are not part of the public repository during manuscript review.
+This repository is the public implementation companion to the paper "DGSRSim: An Object-Level Decoupled 3D Gaussian Scene Representation for Robot Simulation and Online State Synchronization". It exposes the paper-aligned algorithms, interfaces, configuration schemas, and selected qualitative media. Model weights, raw captures, trained assets, complete evaluation records, and simulation assets are not part of the public repository during manuscript review.
 
 This release copy was reorganized from the original `code/` directory. The original source directory was not modified. `AGENTS.md` is an internal collaboration instruction file and is intentionally not included in this GitHub repository.
 
