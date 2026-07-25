@@ -25,7 +25,7 @@
 - `FastSAMRealtime/` 对应在线 RGB-D 观测、对象点云构造、配准质量过滤和粗到细位姿估计。
 - `third_party/3dgrut_conversion/` 对应 Gaussian PLY 到 mesh/USD/USDZ/碰撞资产的转换链。
 - `Simulation/` 对应对象资产导入、场景组合、机器人资产接入和对象状态同步。
-- 当前发布仓库不包含大模型权重、原始传感器采集、训练输出、点云和 USD/USDZ 大资产；这些内容按 `docs/LARGE_FILES.md` 的路径规则外置。
+- 当前发布仓库不包含大模型权重、原始传感器采集、训练输出、点云和 USD/USDZ 大资产。
 
 ## 当前发布副本规模
 

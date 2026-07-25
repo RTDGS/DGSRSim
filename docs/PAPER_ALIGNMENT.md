@@ -38,7 +38,6 @@ Robot task reliability, physical contact stability, collision penetration, grasp
 | Simulation synchronization | `Simulation/` | Scale-preserving JSON state consumption, raw-asset transform writing, scene composition |
 | Camera-to-scene configuration | `FastSAMRealtime/configs/calibration/` | Operational frame definition and installation-specific override point |
 | Asset scale provenance | `FastSAMRealtime/configs/assets/` | Target PLY and converted USDZ identity, bounds, and hashes |
-| External large files | `docs/LARGE_FILES.md` | Placement paths for weights, raw data, point clouds, and simulation assets |
 | Fig. B.1 source values | `docs/figure8_table_derived_diagnostic.csv` | Direct copy of the aggregate entries plotted from manuscript Tables 5 and 6 |
 
 ## Implementation and Reproduction Mapping

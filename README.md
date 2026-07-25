@@ -25,7 +25,7 @@ FastSAMRealtime/                Kinect/RGB-D acquisition, FastSAM segmentation, 
 third_party/3dgrut_conversion/  Conversion scripts from Gaussian PLY to mesh.ply, USD/USDZ, and collision assets
 Simulation/                     LeIsaac/IsaacLab simulation import, scene loading, and object-state synchronization code
 requirements/                   Module-specific dependency references
-docs/                           Release organization notes and external large-file list
+docs/                           Paper alignment, evidence scope, and canonical entry-point notes
 third_party_licenses/           License texts for retained third-party source code
 ```
 
@@ -57,7 +57,7 @@ The paper evaluates reconstruction quality, pose estimation, and visual synchron
 
 The table-derived Fig. B.1 values are recorded in `docs/figure8_table_derived_diagnostic.csv`.
 
-## Large Files and Data
+## Public Release Contents
 
 This GitHub repository contains only source code, configuration files, license files, and documentation. The following files are excluded from GitHub:
 
@@ -67,7 +67,7 @@ This GitHub repository contains only source code, configuration files, license f
 - LeIsaac/IsaacLab scenes, robots, USD/USDZ, FBX, GLB, and other simulation assets;
 - large videos, high-resolution image dumps, and internal QA artifacts. Small qualitative homepage GIFs are retained under `static/results/` to show real-to-simulation synchronization and composable scene variants.
 
-See `docs/LARGE_FILES.md` for the non-public large-file inventory and the local placement conventions. During manuscript review, this public repository does not promise or expose a complete asset, checkpoint, raw-data, or evaluation archive. Authorized supplementary or reviewer material is handled separately from the public project page.
+During manuscript review, this public repository does not promise or expose a complete asset, checkpoint, raw-data, or evaluation archive. Authorized supplementary or reviewer material is handled separately from the public project page.
 
 ## Installation
 
